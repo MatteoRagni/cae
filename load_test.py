@@ -37,7 +37,7 @@ tf.app.flags.DEFINE_string('train_dir',
 #                             "Logging of the use of my device")
 
 tf.app.flags.DEFINE_float('learning_rate',
-                          0.1,
+                          0.01,
                           "Optimizer learning rate")
 
 # reload(autoencoder)
