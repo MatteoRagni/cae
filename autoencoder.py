@@ -6,15 +6,26 @@ from __future__ import division
 from __future__ import print_function
 
 import numpy as np
-import os
-from glob import glob
-import random
-from datetime import datetime
+import tensorflow as tf
+# import os
+# from glob import glob
+# import random
 import time
 
-from six.moves import cPickle as pickle
+# from six.moves import cPickle as pickle
 
-import tensorflow as tf
+
+class Timer(object):
+    def __init__(self):
+        self.tic = None
+        self.toc = None
+
+    def __enter__(self):
+        self.tic = time.time()
+
+    def __exit__(self, type, value, traceback):
+        self.toc = time.time()
+        print("Elapsed time: %.3f sec" % (self.toc - self.tic))
 
 
 class ArgumentError(ValueError):
@@ -256,14 +267,21 @@ class ConvAutoEnc(object):
         self.h       = None
         self.y       = None
         self.weights = None
-        self.biases  = None
         self.latents = None
         self.error   = None
+
+        self.biases_encoder  = None
+        self.biases_decoder  = None
+        self.optimizer       = None
+        self.session         = None
+
+        self.FLAGS = tf.app.flags.FLAGS
 
         self.defineInput()
         self.defineEncoder()
         self.defineDecoder()
         self.defineCost()
+        # self.createSession()
 
     def __getattribute__(self, key):
         try:
@@ -280,9 +298,10 @@ class ConvAutoEnc(object):
                                                           dtype=tf.int32)), name=name)
 
     def leakRelu(self, x, alpha=0.2, name="leak-relu"):
+        alpha_t = tf.constant(alpha, name=(name + "-constant"))
         with self.graph.as_default():
             with tf.name_scope(name):
-                return 0.5 * ((1 + alpha) * x + (1 - alpha) * abs(x))
+                return 0.5 * ((1 + alpha_t) * x + (1 - alpha_t) * abs(x))
 
     def defineInput(self):
         with self.graph.as_default():
@@ -292,15 +311,19 @@ class ConvAutoEnc(object):
                     self.x = self._corrupt(x)
                 else:
                     self.x = x
+                self.add3summary(self.x, "x")
+        return self
 
     def defineEncoder(self):
+        if self.x is None:
+            raise RuntimeError("You must define input to define the encoder")
         with self.graph.as_default():
             with tf.name_scope("encoder"):
                 self.weights = []
-                self.biases  = []
                 self.patches = []
                 self.latent  = []
                 self.shapes  = []
+                self.biases_encoder  = []
                 x_current    = self.x
                 for layer in range(0, self.layers):
                     old_depth = x_current.get_shape().as_list()[3]
@@ -308,56 +331,110 @@ class ConvAutoEnc(object):
                     patch = [self.patch_size,
                              self.patch_size, old_depth, new_depth]
                     self.shapes.append(x_current.get_shape().as_list())
-                    # self.patches.append(patch)
 
                     # Naming
                     name_W    = "weight-%d"              % layer
-                    name_B    = "bias-%d"                % layer
+                    name_B    = "enc-bias-%d"            % layer
                     name_conv = "encoder-convolution-%d" % layer
                     name_sum  = "encoder-sum-%d"         % layer
                     name_out  = "encoder-out-%d"         % layer
 
                     W = tf.Variable(tf.truncated_normal(
                         patch, stddev=0.1), name=name_W)
+                    self.add2summary(W, name_W)
                     B = tf.Variable(tf.zeros([new_depth]), name=name_B)
+                    self.add2summary(B, name_B)
 
                     self.weights.append(W)
-                    self.biases.append(B)
+                    self.biases_encoder.append(B)
 
-                    h = tf.add(
+                    h_layer = tf.add(
                         tf.nn.conv2d(x_current, W, strides=self.strides,
                                      padding=self.padding, name=name_conv),
                         B, name=name_sum
                     )
-                    x_current = self.leakRelu(h, name=name_out)
+                    x_current = self.leakRelu(h_layer, name=name_out)
                 self.h = x_current
+                self.add2summary(self.h, "h")
+
+        return self
+
+    def add1summary(self, var, name):
+        assert type(name) is str, "Name must be a string"
+        with tf.name_scope("summaries"):
+            tf.scalar_summary(name, var)
+
+    def add2summary(self, var, name):
+        assert type(name) is str, "Name must be a string"
+        with tf.name_scope("summaries"):
+            pass
+            tf.histogram_summary(name, var)
+
+    def add3summary(self, var, name, batch=5):
+        assert type(name) is str, "Name must be a string"
+        assert type(batch) is int, "batch size must be an integer"
+        assert batch > 0, "batch size must be positive"
+        with tf.name_scope("summaries"):
+            tf.image_summary(name, var, max_images=batch)
 
     def defineDecoder(self):
+        if (self.x is None) or (self.x is None):
+            raise RuntimeError("To define a decoder you must define the encoder")
+        self.biases_decoder = []
         with self.graph.as_default():
             with tf.name_scope("decoder"):
-                weights = self.weights.reverse()
-                shapes  = self.shapes.reverse()
                 x_current = self.h
-                for layer in range(0, self.layers):
+                for current_layer in range(0, self.layers):
+                    layer       = self.layers - (current_layer + 1)
                     name_deconv = "decoder-deconvolution-%i" % layer
                     name_sum    = "decoder-sum-%i"           % layer
                     name_out    = "decoder-out-%i"           % layer
+                    name_B      = "dec-bias-%d"              % layer
 
-                    W = weights[layer]
-                    B = tf.Variable(tf.zeros([W.get_shape().as_list()[2]]))
+                    W = self.weights[layer]
+                    B = tf.Variable(tf.zeros([W.get_shape().as_list()[2]]), name=name_B)
+                    self.add2summary(B, name_B)
 
-                    shape = tf.pack([tf.shape(self.x)[0], shapes[layer][1:3]])
+                    self.biases_decoder.append(B)
 
-                    h = self.leakRelu(tf.add(
-                        tf.nn.conv2d_traspose(
+                    shape = self.shapes[layer]
+                    h_layer = self.leakRelu(tf.add(
+                        tf.nn.conv2d_transpose(
                             x_current, W, shape, strides=self.strides, padding=self.padding, name=name_deconv),
                         B, name=name_sum
                     ))
-                    x_current = self.leakRelu(h, name=name_out)
+                    x_current = self.leakRelu(h_layer, name=name_out)
                 self.y = x_current
+                self.add3summary(self.y, "y")
+        return self
 
     def defineCost(self):
+        if (self.x is None) or (self.h is None) or (self.y is None):
+            raise RuntimeError("You cannot define a cost, if you not define output")
         with self.graph.as_default():
             with tf.name_scope("cost-function"):
                 self.error = tf.reduce_sum(
                     tf.square(self.y - self.x), name="error-definition")
+                self.add1summary(self.error, "error")
+        return self
+
+    def createSession(self, learning_rate=0.01):
+        assert type(learning_rate) is float, "Learning Rate must be a float"
+        assert learning_rate > 0, "Learning rate must be positive"
+
+        with self.graph.as_default():
+            with tf.name_scope("define-optimizer"):
+                self.optimizer = tf.train.AdamOptimizer(learning_rate).minimize(self.error)
+        self.session = tf.Session(graph=self.graph)
+        with self.session.as_default():
+            self.session.run(tf.initialize_all_variables())
+        return self
+
+    def trainBatch(self, training_tensor):
+        assert self.session is None, "Session is not initialized"
+        assert type(training_tensor) is np.ndarray, "Training tensor is not Numpy Tensor"
+        with self.session.as_default():
+            self.session.run(self.optimizer, feed_dict={self.x: training_tensor})
+            return {'cost': self.session.run(self.error, feed_dict={self.x: training_tensor}),
+                    'y': self.session.run(self.y, feed_dict={self.x: training_tensor}),
+                    'h': self.session.run(self.h, feed_dict={self.x: training_tensor})}
