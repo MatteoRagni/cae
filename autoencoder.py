@@ -10,22 +10,6 @@ import tensorflow as tf
 # import os
 # from glob import glob
 # import random
-import time
-
-# from six.moves import cPickle as pickle
-
-
-class Timer(object):
-    def __init__(self):
-        self.tic = None
-        self.toc = None
-
-    def __enter__(self):
-        self.tic = time.time()
-
-    def __exit__(self, type, value, traceback):
-        self.toc = time.time()
-        print("Elapsed time: %.3f sec" % (self.toc - self.tic))
 
 
 class ArgumentError(ValueError):
@@ -355,7 +339,8 @@ class ConvAutoEnc(object):
                     )
                     x_current = self.leakRelu(h_layer, name=name_out)
                 self.h = x_current
-                self.add2summary(self.h, "h")
+                self.addXsummary(self.h, "h")
+                # self.add2summary(self.h, "h")
 
         return self
 
@@ -370,12 +355,20 @@ class ConvAutoEnc(object):
             pass
             tf.histogram_summary(name, var)
 
-    def add3summary(self, var, name, batch=5):
+    def add3summary(self, var, name, batch=1):
         assert type(name) is str, "Name must be a string"
         assert type(batch) is int, "batch size must be an integer"
         assert batch > 0, "batch size must be positive"
         with tf.name_scope("summaries"):
             tf.image_summary(name, var, max_images=batch)
+
+    def addXsummary(self, var, name, batch=1):
+        assert type(name) is str, "Name must be a string"
+        assert type(batch) is int, "batch size must be a integer"
+        assert batch > 0, "batch size must be positive"
+        for layer in range(0, var.get_shape()[3]):
+            name_l = "%s-L%d" % (name, layer)
+            tf.image_summary(name_l, var[:, :, :, layer:layer + 1], max_images=batch)
 
     def defineDecoder(self):
         if (self.x is None) or (self.x is None):

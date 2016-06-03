@@ -19,6 +19,7 @@ import tensorflow as tf
 
 # from imp import reload
 import autoencoder
+from timer import Timer
 
 
 # Some definitions on the engine
@@ -28,9 +29,9 @@ tf.app.flags.DEFINE_string('train_dir',
                            '/tmp/training_nn',
                            "Training directory")
 
-# tf.app.flags.DEFINE_integer('max_steps',
-#                             1000,
-#                             "Number of iterations")
+tf.app.flags.DEFINE_integer('max_steps',
+                            10,
+                            "Number of iterations")
 
 # tf.app.flags.DEFINE_boolean('log_device_placement',
 #                             True,
@@ -48,9 +49,9 @@ sets = autoencoder.ConvAutoEncSettings()
 # To get a preview of the options that can be set, print(sets)
 sets.input_shape = [50, 227, 227, 3]
 sets.corruption = False
-sets.layers = 2
+sets.layers = 1
 sets.patch_size = 29
-sets.depth_increasing = 2
+sets.depth_increasing = 4
 sets.strides = [1, 2, 2, 1]
 sets.padding = "SAME"
 sets.cuda_enabled = False
@@ -62,7 +63,8 @@ print("Running on TensorFlow [%s]" % tf.__version__)
 cae = autoencoder.ConvAutoEnc(sets)
 with open("./dataset/data.pickle", "rb") as f:
     no_batch = pickle.load(f)
-    first_run = pickle.load(f)
+    counter = 0
+
     # cae.trainBatch(first_run)
     with tf.Session(graph=cae.graph) as session:
         try:
@@ -79,15 +81,19 @@ with open("./dataset/data.pickle", "rb") as f:
                 input("Press a key to continue...")
             except SyntaxError:
                 pass
-
             with tf.name_scope("Training"):
-                for i in range(0, length // offset):
-                    with autoencoder.Timer():
-                        init = i * offset
-                        ends = (i + 1) * offset
-                        result = session.run([cae.optimizer, merged, cae.error], feed_dict={cae.x: first_run[init:ends, :, :, :]})
-                        writer.add_summary(result[1], i)
-                        print("Error at step %i is: %5.10f" % (i, result[2]))
+                for reloaded in range(0, no_batch - 4):
+                    first_run = pickle.load(f)
+                    for i in range(0, length // offset):
+                        with Timer():
+                            init = i * offset
+                            ends = (i + 1) * offset
+                            for tt in range(0, FLAGS.max_steps):
+                                result = session.run([cae.optimizer], feed_dict={cae.x: first_run[init:ends, :, :, :]})
+                                counter += 1
+                            result = session.run([merged, cae.error], feed_dict={cae.x: first_run[init:ends, :, :, :]})
+                            writer.add_summary(result[0], counter)
+                            print("Error at step %i is: %5.10f" % (counter, result[1]))
         finally:
             if writer is not None:
                 writer.close()
