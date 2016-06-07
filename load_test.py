@@ -7,7 +7,7 @@ from __future__ import division
 from __future__ import print_function
 
 # import numpy as np
-# import os
+import os
 # from glob import glob
 # import random
 # from datetime import datetime
@@ -29,13 +29,17 @@ tf.app.flags.DEFINE_string('train_dir',
                            '/tmp/training_nn',
                            "Training directory")
 
+tf.app.flags.DEFINE_string('saver_dir',
+                           os.joinpath(os.getcwd(), 'training.ckpt'),
+                           "Chackpoint file for saving")
+
 tf.app.flags.DEFINE_integer('max_steps',
                             10,
                             "Number of iterations")
 
-# tf.app.flags.DEFINE_boolean('log_device_placement',
-#                             True,
-#                             "Logging of the use of my device")
+tf.app.flags.DEFINE_boolean('log_device_placement',
+                            True,
+                            "Logging of the use of my device")
 
 tf.app.flags.DEFINE_float('learning_rate',
                           0.01,
@@ -69,6 +73,7 @@ with open("./dataset/data.pickle", "rb") as f:
     with tf.Session(graph=cae.graph) as session:
         try:
             cae.optimizer = tf.train.AdamOptimizer(FLAGS.learning_rate, name="Optimizer").minimize(cae.error)
+            saver = tf.train.Saver()
             session.run(tf.initialize_all_variables())
             merged = tf.merge_all_summaries()
             writer = tf.train.SummaryWriter(FLAGS.train_dir, session.graph)
@@ -83,6 +88,7 @@ with open("./dataset/data.pickle", "rb") as f:
                 pass
             with tf.name_scope("Training"):
                 for reloaded in range(0, no_batch - 4):
+                    print("RUNNING BATCH: %d" % reloaded)
                     first_run = pickle.load(f)
                     for i in range(0, length // offset):
                         with Timer():
@@ -94,6 +100,7 @@ with open("./dataset/data.pickle", "rb") as f:
                             result = session.run([merged, cae.error], feed_dict={cae.x: first_run[init:ends, :, :, :]})
                             writer.add_summary(result[0], counter)
                             print("Error at step %i is: %5.10f" % (counter, result[1]))
+                            saver.save(session, FLAGS.saver_dir)
         finally:
             if writer is not None:
                 writer.close()
