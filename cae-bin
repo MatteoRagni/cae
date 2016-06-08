@@ -1,0 +1,167 @@
+#!/usr/bin/env python3
+
+# Importing libraries
+# For using my GPU I have to do that...
+# export TF_MIN_GPU_MULTIPROCESSOR_COUNT=2
+
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
+
+import os
+from timer import Timer
+from timer import timestring
+from argparse import ArgumentParser
+
+
+# PARSING COMMAND LINE ARGUMENTS
+cmd = ArgumentParser(prog="cae-bin",
+                     description="Stacked Convolutional Autoencoder",
+                     epilog="Matteo Ragni - David Windridge - 2016")
+
+DEFAULT_TRAINING_DIR  = '/tmp/trinaing_nn'
+CURRENT_TRAINING_TIME = timestring()
+DEFAULT_RUNNING_DIR   = os.path.join(DEFAULT_TRAINING_DIR, CURRENT_TRAINING_TIME + '-run')
+DEFAULT_SAVING_DIR    = os.path.join(DEFAULT_TRAINING_DIR, CURRENT_TRAINING_TIME + '-save/cae.ckpt')
+DEFAULT_BATCH_SIZE    = 10
+DEFAULT_STEP_SIZE     = 10
+DEFAULT_LEARN_RATE    = 0.01
+VERBOSITY             = 1
+
+cmd.add_argument('-in', dest='dataset', type=str, nargs=1, required=True,
+                 help='Input dataset for the training')
+cmd.add_argument('-r', '--run', dest='runs', type=str, nargs=1, default=DEFAULT_RUNNING_DIR,
+                 help='Define a specific run directory, inside the training directory [%s]' % DEFAULT_RUNNING_DIR)
+cmd.add_argument('-s', '--save', dest='save', type=str, nargs=1, default=DEFAULT_SAVING_DIR,
+                 help='Define save positions for the result of the training, as checkpoint [%s]' % DEFAULT_SAVING_DIR)
+cmd.add_argument('-bs', '--batchsize', dest='batchsize', type=int, nargs=1, default=DEFAULT_BATCH_SIZE,
+                 help='Define the size of each batch. It must be compatible with RAM or VRAM capabilities. It must be positive [%d]' % DEFAULT_BATCH_SIZE)
+cmd.add_argument('-ss', '--stepsize', dest='stepsize', type=int, nargs=1, default=DEFAULT_STEP_SIZE,
+                 help='Define the number of step optimizer will run on each batch. It must be positive [%d]' % DEFAULT_STEP_SIZE)
+cmd.add_argument('-lr', '--learnrate', dest='learning', type=float, nargs=1, default=DEFAULT_LEARN_RATE,
+                 help='Define the learning rate for the optimizer [%f]' % DEFAULT_LEARN_RATE)
+cmd.add_argument('-v', '--verbosity', dest='verb', type=int, nargs=1, default=VERBOSITY,
+                 help='Define verbosity level, from 0 to 3 [%d]' % VERBOSITY)
+cmd.add_argument('-tg', '--telegram', dest='telegram', action='store_true',
+                 help='Enable notifications using system telegram bot [NO]')
+cmd_args = cmd.parse_args()
+
+# Handles the command line arguments and check everything is ok
+try:
+    assert os.path.isfile(' '.join(cmd_args.dataset)), "Dataset file [%s] does not exist" % ' '.join(cmd_args.dataset)
+    assert cmd_args.stepsize  > 0,                     "Step size must be a positive integer"
+    assert cmd_args.batchsize > 0,                     "Batch size must be a positive integer"
+    assert cmd_args.learning  > 0.0,                   "Batch size must be a positive float"
+except AssertionError as error:
+    print("Input Error: " + str(error))
+    exit(126)
+
+if cmd_args.verb[0] > 3:
+    VERBOSITY = 3
+elif cmd_args.verb[0] < 0:
+    VERBOSITY = 0
+else:
+    VERBOSITY = cmd_args.verb[0]
+
+DEVICE_PLACEMENT_LOG = True if VERBOSITY > 1 else False
+def log(s, l=1):
+    if l >= VERBOSITY:
+        print(s)
+
+exit(0)
+# MAIN PARTTrue
+from six.moves import cPickle as pickle
+import tensorflow as tf
+import autoencoder
+if cmd_args.telegram:
+    from tg_notifier import send_telegram
+
+
+# Some definitions on the engine
+FLAGS = tf.app.flags.FLAGS
+tf.app.flags.DEFINE_string('train_dir',
+                           ' '.join(cmd_args.train),
+                           "Training directory")
+
+tf.app.flags.DEFINE_string('saver_dir',
+                           ' '.join(cmd_args.save),
+                           "Chackpoint file for saving")
+
+tf.app.flags.DEFINE_integer('max_steps',
+                            10,
+                            "Number of iterations")
+
+tf.app.flags.DEFINE_boolean('log_device_placement',
+                            DEVICE_PLACEMENT_LOG,
+                            "Logging of the use of my device")
+
+tf.app.flags.DEFINE_float('learning_rate',
+                          0.01,
+                          "Optimizer learning rate")
+
+# Define configurations for the Convolutional Autoencoder
+# To get a preview of the options that can be set, print(sets)
+sets = autoencoder.ConvAutoEncSettings()
+sets.input_shape = [10, 227, 227, 1]
+sets.corruption = False
+sets.layers = 1
+sets.patch_size = 29
+sets.depth_increasing = 4
+sets.strides = [1, 2, 2, 1]
+sets.padding = "SAME"
+sets.cuda_enabled = True
+
+print(sets)
+print("Running on TensorFlow [%s]" % tf.__version__)
+# http://stackoverflow.com/questions/36798669/how-can-i-separate-runs-of-my-tensorflow-code-in-tensorboard
+# Loading the Convolutional Autoencoder
+cae = autoencoder.ConvAutoEnc(sets)
+with open("./dataset/data_int.pickle", "rb") as f:
+    no_batch = pickle.load(f)
+    counter = 0
+
+    # cae.trainBatch(first_run)
+    with tf.Session(graph=cae.graph) as session:
+        try:
+            cae.optimizer = tf.train.AdamOptimizer(FLAGS.learning_rate, name="Optimizer").minimize(cae.error)
+            saver = tf.train.Saver()
+            session.run(tf.initialize_all_variables())
+            merged = tf.merge_all_summaries()
+            writer = tf.train.SummaryWriter(FLAGS.train_dir, session.graph)
+
+            offset   = 10
+            length   = 1000
+
+            # Waits before starting the
+            try:
+                input("Press a key to continue...")
+            except SyntaxError:
+                pass
+
+            with tf.name_scope("Training"):
+                for reloaded in range(0, no_batch - 4):
+                    print("RUNNING BATCH: %d" % reloaded)
+                    first_run = pickle.load(f)
+                    for i in range(0, length // offset):
+                        with Timer():
+                            init = i * offset
+                            ends = (i + 1) * offset
+                            for tt in range(0, FLAGS.max_steps):
+                                result = session.run([cae.optimizer], feed_dict={cae.x: first_run[init:ends, :, :, :]})
+                                counter += 1
+                            result = session.run([merged, cae.error], feed_dict={cae.x: first_run[init:ends, :, :, :]})
+                            writer.add_summary(result[0], counter)
+                            print("Error at step %i is: %5.10f" % (counter, result[1]))
+                            saver.save(session, FLAGS.saver_dir)
+        finally:
+            if writer is not None:
+                writer.close()
+            if session is not None:
+                session.close()
+
+print("StopHere")
+try:
+    os.system("echo 'Training completed' | notify-telegram")
+except Exception:
+    print("Skipping telegram notification... it is not mandatory...")

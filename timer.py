@@ -1,6 +1,11 @@
 import time
 
 
+def timestring():
+    from datetime import datetime
+    return datetime.now().strftime("%Y%m%d-%H%M")
+
+
 class Timer(object):
     start = None
 
