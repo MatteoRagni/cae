@@ -186,6 +186,7 @@ with open(FLAGS.dataset_file, "rb") as f:
         #    pdb.set_trace()
         #    log("Something went wrong reading pickle file")
         finally:
+            log("Exception Raised!")
             saver.save(session, FLAGS.saver_dir)
 
 
