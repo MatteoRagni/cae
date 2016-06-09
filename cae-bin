@@ -11,11 +11,11 @@ from __future__ import print_function
 import sys
 sys.path.insert(0, './lib')
 
+import pdb
 import os
 from timer import Timer
 from timer import timestring
 from argparse import ArgumentParser
-
 
 # PARSING COMMAND LINE ARGUMENTS
 cmd = ArgumentParser(prog="cae-bin",
@@ -25,7 +25,7 @@ cmd = ArgumentParser(prog="cae-bin",
 DEFAULT_TRAINING_DIR  = '/tmp/training_nn'
 CURRENT_TRAINING_TIME = timestring()
 DEFAULT_RUNNING_DIR   = os.path.join(DEFAULT_TRAINING_DIR, CURRENT_TRAINING_TIME + '-run')
-DEFAULT_SAVING_DIR    = os.path.join(DEFAULT_TRAINING_DIR, CURRENT_TRAINING_TIME + '-save/cae.ckpt')
+DEFAULT_SAVING_DIR    = os.path.join(DEFAULT_TRAINING_DIR, 'save-' + CURRENT_TRAINING_TIME + '-cae.ckpt')
 DEFAULT_BATCH_SIZE    = 10
 DEFAULT_STEP_SIZE     = 10
 DEFAULT_LEARN_RATE    = 0.01
@@ -62,9 +62,9 @@ except AssertionError as error:
     print("Input Error10: " + str(error))
     exit(126)
 
-if cmd_args.verb[0] > 3:
+if cmd_args.verb > 3:
     VERBOSITY = 3
-elif cmd_args.verb[0] < 0:
+elif cmd_args.verb < 0:
     VERBOSITY = 0
 
 def batch_loop(length):
@@ -77,7 +77,7 @@ if cmd_args.telegram:
     from tg_notifier import TelegramNotifier
     notifier = TelegramNotifier()
     def notify(m):
-        notifier.sendMessage(m)
+        notifier.post(m)
 else:
     def notify(m):
         pass
@@ -159,38 +159,36 @@ with open(FLAGS.dataset_file, "rb") as f:
                 saver.restore(session, FLAGS.saver_dir)
             session.run(tf.initialize_all_variables())
 
-            # Creating session objects
+            # Creating srm -rf /tmp/training-nnession objects
             merged = tf.merge_all_summaries()
             writer = tf.train.SummaryWriter(FLAGS.train_dir, session.graph)
             result = [None, 10e4]
 
-            # Training main loop. It is a nested loop of three loops
+            # Training mrm -rf /tmp/training-nnain loop. It is a nested loop of three loops
             #  1. dataset reading from file loop
             #  2. dataset read batch subdivision
             #  3. optimization steps on batch subdivision
             with tf.name_scope("Training"):
                 for b in range(0, BATCH_LIMIT):
-                    log("RUNNING BATCH: %d (c: %i, e: %5.10f)" % (b, result[1]))
+                    log("RUNNING BATCH: %d (c: %i, e: %5.10f)" % (b, counter, result[1]))
                     dataset = pickle.load(f)
-                    for init, ends in batch_loop(np.get_shape(dataset)[1]):
-                        with Timer(): # batch timing
+                    for init, ends in batch_loop(np.shape(dataset)[0]):
+                        with Timer(): # batch timiimport pdbng
                             for step in range(0, FLAGS.max_steps):
                                 result = session.run([cae.optimizer], feed_dict={cae.x: dataset[init:ends, :, :, :]})
                                 counter += 1
                             result = session.run([merged, cae.error], feed_dict={cae.x: dataset[init:ends, :, :, :]})
-                            writer.add_summary(result[0], counter)
                             log("Error at step %i is: %5.10f" % (counter, result[1]), 2)
+                            writer.add_summary(result[0], counter)
                             saver.save(session, FLAGS.saver_dir)
 
-        except PicklingError as error:
-            log("Something went wrong reading pickle file")
-
+        #except PicklingError as error:
+        #    pdb.set_trace()
+        #    log("Something went wrong reading pickle file")
         finally:
-            if writer is not None:
-                writer.close()
-            if session is not None:
-                session.close()
-            exit(1)
+            saver.save(session, FLAGS.saver_dir)
+
+
 
 log("Learning Completed")
 notify("Learning completed")
