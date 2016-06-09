@@ -7,18 +7,15 @@ import yaml
 
 class string(str):
     def chunk(self, length):
-        assert type(length) is int, "Chunk lenght must be an int. Received a %s" % type(lenght)
+        assert type(length) is int, "Chunk lenght must be an int. Received a %s" % type(length)
         assert length > 0, "Chunk lenght must be positive. Received %d" % length
-        chunks = len(self) // length + 1
-        for i in range(0, chunks)
-            a = i * length
-            b = (i + 1) * length if (i + 1) * length
-
-
+        for i in range(0, len(self), length):
+            yield self[i:i + length]
 
 
 class TelegramNotifier:
     CONFIG_PATH = '/etc/notify-telegram.conf'
+    MAX_LENGTH  = 3000
 
     def __init__(self):
         try:
@@ -47,10 +44,7 @@ class TelegramNotifier:
         if self.config is None:
             pass
         assert type(m) is str, "Message must be a string"
-        payload = {
-          'chat_id': self.chatid,
-          'text': m
-        }
-        requests.post(self.uri.path, )
-
-    def __chunkstr__
+        payload = {'chat_id': self.chatid, 'text': ""}
+        for x in string(m).chunk(self.MAX_LENGTH):
+            payload['text'] = x
+            requests.post(self.uri_path, payload)
