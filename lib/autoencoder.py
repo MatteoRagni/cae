@@ -397,7 +397,7 @@ class ConvAutoEnc(object):
                         B, name=name_sum
                     ))
                     x_current = self.leakRelu(h_layer, name=name_out)
-                self.y = x_current
+                self.y = x_current + self.x # RESIDUAL LEARNING MODIFICATION
                 self.add3summary(self.y, "y")
         return self
 
