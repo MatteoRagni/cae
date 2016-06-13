@@ -1,5 +1,18 @@
 #!/usr/bin/env python3
 
+"""
+This module implements a **Convolutional Autoencoders**. There are four classes implemented inside
+this module. An `ArgumentError` exceptions class and:
+
+ * `ConvAutoEncSettings`: an helper class for the settings of a single convolutional autoencoder layer.
+   All properties of this class are exposed into the convolutional layer class.
+ * `ConvAutoEnc`: is the simpler layer that is possible to define, and is the layer that is actually
+   trained by itself. The settings of the layers inside this layer (e.g. stride, padding and weight size)
+   atre shared and defined in the helper class.
+ * `CombinedAutoencoder`: is the class that contains all the simpler layer and is responsible for the
+   learning process of the single layers, one at the time.
+"""
+
 # Importing libraries
 from __future__ import absolute_import
 from __future__ import division
@@ -13,6 +26,11 @@ FLAGS = tf.app.flags.FLAGS
 
 
 class ArgumentError(ValueError):
+    """
+    Helper class to make easier to understand when an
+    argument contains an error. Inherit everithing from
+    the `ValueError` class
+    """
     pass
 
 #  ___      _   _   _                 ___ _
@@ -23,8 +41,16 @@ class ArgumentError(ValueError):
 
 
 class ConvAutoEncSettings(object):
-
+    """
+    Helper class to better define the simple layer configurations for the convolutional autoencoder.
+    This class handles all the checks on the input, and exposes some properties to the `ConvAutoEnc`
+    object to simplify the configuration even before building the graph.
+    """
     def __init__(self):
+        """
+        Initialize all the properties to `None`. Everything must be initialized or, when **called by
+        the layer it will raise an error**
+        """
         self.__input_shape       = None
         self.__corruption        = None
         self.__corruption_min    = None  # 0
@@ -39,6 +65,9 @@ class ConvAutoEncSettings(object):
 
     # Check methods
     def checkComplete(self):
+        """
+        Check completeness of the settings. **Raise an error if everything is not explicitly set**.
+        """
         if not(self.input_shape       is not None and
                self.corruption        is not None and
                self.layers            is not None and
@@ -59,24 +88,58 @@ class ConvAutoEncSettings(object):
 
     @property
     def input_shape(self):
+        """
+        Property getter for `input_shape`.
+
+        This property defines the shape of the input layer tensor in the form of:
+
+         1. examples batch size
+         2. images width
+         3. image height
+         4. image depth (usually 1 for monochrome images, 3 for RGB images and 4 for images with alpha)
+
+        As for now image width and image height must be equal, since the convolutional autoencoder is
+        defined with the constraint on weights:
+
+        $$
+        W_{\mathrm{out}} = W^{T}_{\mathrm{in}}
+        $$
+        """
         return self.__input_shape
 
     @input_shape.setter
     def input_shape(self, value):
+        """ for now image width and image height must be equal, since the convolutional autoencoder is
+         defined with the constraint on weights:
+
+         $$
+         W_{\mathrm{out}} = W^{T}_{\mathrm{in}}
+         $$
+        Property setter for `input_shape`. Requires a `list` of positive `int` greater than zero as input.
+        **Please note that image width and image height must be equal**.
+        """
         if value:
             self._checkList(value)
             for v in value:
                 self._checkInt(v)
                 if v <= 0:
                     raise ArgumentError("Values must be positive")
+            assert value[1] == value[2], "Image width and image height must be equal"
         self.__input_shape = value
 
     @property
     def corruption(self):
+        """
+        Property getter for corruption (noise) into the input. It is a boolean value.
+        """
         return self.__corruption
 
     @corruption.setter
     def corruption(self, value):
+        """
+        Property setter for corruption of the input. It requires a boolean value. If `False`,
+        automatically sets `corruption_min` and `corruption_max` to 0.
+        """
         if value:
             self._checkBool(value)
         if value is False:
@@ -85,10 +148,18 @@ class ConvAutoEncSettings(object):
 
     @property
     def corruption_min(self):
+        """
+        Property getter for corruption noise minimum value. Corruption is noise centered in
+        the mean of corruption min and max.
+        """
         return self.__corruption_min
 
     @corruption_min.setter
     def corruption_min(self, value):
+        """
+        Property setter for the corruption noise minimum value. Please be aware that this value
+        must be smaller than `corruption_max`, if set, or an error will be raised. It must be a float.
+        """
         if value:
             self._checkFloat(value)
         if self.corruption_max:
@@ -99,10 +170,18 @@ class ConvAutoEncSettings(object):
 
     @property
     def corruption_max(self):
+        """
+        Property getter for corruption noise maximum value. Corruption is noise centered in
+        the mean of corruption min and max.
+        """
         return self.__corruption_max
 
     @corruption_max.setter
     def corruption_max(self, value):
+        """
+        Property setter for the corruption noise maximum value. Please be aware that this value
+        must be greater than `corruption_min`, if set, or an error will be raised. It must be a float.
+        """
         if value:
             self._checkFloat(value)
         if self.corruption_min:
@@ -113,10 +192,17 @@ class ConvAutoEncSettings(object):
 
     @property
     def layers(self):
+        """
+        Property getter for layers. Define the number of the layer in this unit of the autoencoder.
+        """
         return self.__layers
 
     @layers.setter
     def layers(self, value):
+        """
+        Property setter for the number of layers in this unit of the convolutional autoencoder.
+        Must be an integer greater or equal to one.
+        """
         if value:
             self._checkInt(value)
             if value < 1:
@@ -125,34 +211,70 @@ class ConvAutoEncSettings(object):
 
     @property
     def patch_size(self):
+        """
+        Property getter for the size of the patch. Weights tensor size is (convention "NHWC"):
+
+        $$
+        \mathrm{dim}(W) = \mathrm{input\_depth}\times\mathrm{patch\_size}^2\times\mathrm{input\_depth}
+        $$
+        """
         return self.__patch_size
 
     @patch_size.setter
     def patch_size(self, value):
+        """
+        Property setter for the convolutional weigths tensor patch (the two inner dimensions). Must
+        be an `int` greater than one.
+        """
         if value:
             self._checkInt(value)
-            if value <= 0:
-                raise ArgumentError("Values must be positive")
+            if value <= 1:
+                raise ArgumentError("Values must be positive, greater than one")
         self.__patch_size = value
 
     @property
     def depth_increasing(self):
+        """
+        Property getter for the increasing depth. Final depth of the filter will be:
+
+        $$
+        \mathrm{output\_size} = \mathrm{input\_size} + \mathrm{depth\_increasing}
+        $$
+        """
         return self.__depth_increasing
 
     @depth_increasing.setter
     def depth_increasing(self, value):
+        """
+        Property setter for the depth incresing levels. Requires an `int` positive or 0.
+        """
         if value:
             self._checkInt(value)
-            if value <= 0:
-                raise ArgumentError("Values must be positive")
+            if value < 0:
+                raise ArgumentError("Values must be positive or zero")
         self.__depth_increasing = value
 
     @property
     def strides(self):
+        """
+        Property getter for the strides of the convolutional layer. The strides dimensions are define
+        the reduction in size of the image:
+
+        $$
+        \mathrm{dim}(S) = 1 \times \mathrm{red}_{x} \times \mathrm{red}_{y} \times 1
+        $$
+
+        The first 1 works on batch elements number, while the last works on depth. With 1, no input
+        is skipped.
+        """
         return self.__strides
 
     @strides.setter
     def strides(self, value):
+        """
+        Property setter for the strides dimensions. It should be a list with four positive `int`,
+        greater than 0
+        """
         if value:
             self._checkList(value, 4)
             for v in value:
@@ -163,10 +285,16 @@ class ConvAutoEncSettings(object):
 
     @property
     def padding(self):
+        """
+        Property getter for the padding. It can be only "VALID" or "SAME".
+        """
         return self.__padding
 
     @padding.setter
     def padding(self, value):
+        """
+        Property setter for padding: it can be only "SAME" or "VALID"
+        """
         if value:
             self._checkStr(value)
             if value != "SAME" and value != "VALID":
@@ -176,41 +304,75 @@ class ConvAutoEncSettings(object):
 
     @property
     def prefix_name(self):
+        """
+        Prefix name for this particular layer. It will be usefull to identify it inside
+        the TensorBoard visualization tool (will be used in front of all `name` property)
+        """
         return self.__prefix_name
 
     @prefix_name.setter
     def prefix_name(self, value):
+        """
+        Propert setter of prefix name for this particular layer. It requires a `str` as input.
+        """
         if value:
             self._checkStr(value)
             self.__prefix_name = value
 
     @property
     def residual_learning(self):
+        """
+        Property getter for residual learning flag. If this flag is `False`, the objective funtion in
+
+
+        $$
+        \mathrm{min}\,(y - x)^2 = \mathrm{min}\,(D(E(x)) - x)^2
+        $$
+
+        while, if `True`, it will try to learn:
+
+        $$
+        \mathrm{min}\,(D(E(x)) + x - x)^2 = \mathrm{min}\,(D(E(x)))^2
+        $$
+
+        (thus, the residuals only).
+        """
         return self.__residual_learning
 
     @residual_learning.setter
     def residual_learning(self, value):
+        """
+        Define if learning the residuals: requires a `bool` ad input
+        """
         if value:
             self._checkBool(value)
         self.__residual_learning = value
 
     # Other methods
     def _checkType(self, obj, tp):
+        """
+        Helper function, check with an `assert` the type specified.
+        """
         assert type(obj) is tp, "%r is not of the correct type %r" % (obj, tp)
 
     def _checkStr(self, obj):
+        """`str` check helper function"""
         self._checkType(obj, str)
 
     def _checkInt(self, obj):
+        """`int` check helper function"""
         self._checkType(obj, int)
 
     def _checkFloat(self, obj):
+        """`float` check helper function"""
         self._checkType(obj, float)
 
     def _checkBool(self, obj):
+        """`bool` check helper function"""
         self._checkType(obj, bool)
 
     def _checkList(self, obj, size=0):
+        """`list` check helper function. If a size is given check consistency"""
         self._checkType(obj, list)
         self._checkInt(size)
         if size > 0:
@@ -218,6 +380,7 @@ class ConvAutoEncSettings(object):
                 len(obj), size)
 
     def _checkHash(self, obj, keylist=None):
+        """`dict` check helper function. If a keylist is given, check it contains all the keys"""
         self._checkType(obj, dict)
         if keylist is not None:
             self._checkList(keylist)
@@ -229,9 +392,11 @@ class ConvAutoEncSettings(object):
                         "Key %r is not defined in object %r" % (k, obj))
 
     def _inspect(self):
+        """Inspect"""
         print(self.__str__())
 
     def __str__(self):
+        """Convert object into `str`"""
         return "  Convolutional Autoencoder Settings"                    + "\n" + \
                "--------------------------------------"                  + "\n" + \
                " - prefix_name       = {}".format(self.prefix_name)      + "\n" + \
@@ -447,5 +612,3 @@ class CombinedAutoencoder:
 
     def len(self):
         return len(self.caes)
-
-    def
