@@ -1,3 +1,9 @@
+#!/usr/bin/env python3
+
+"""
+Helper class for timing (tic-toc and global)
+"""
+
 import time
 
 

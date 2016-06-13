@@ -1,11 +1,19 @@
 #!/usr/bin/env python3
 
+"""
+This module implements a really simple Bot notifier on Telegram service.
+The configuration file must be in: `/etc/notify-telegram.conf`
+"""
+
 import requests
 from os.path import isfile
 import yaml
 
 
 class string(str):
+    """
+    String splitter based on length
+    """
     def chunk(self, length):
         assert type(length) is int, "Chunk lenght must be an int. Received a %s" % type(length)
         assert length > 0, "Chunk lenght must be positive. Received %d" % length
@@ -18,6 +26,10 @@ class TelegramNotifier:
     MAX_LENGTH  = 3000
 
     def __init__(self):
+        """
+        Initialize the telegram notifier object using options defined in the configuration
+        YAML file: `/etc/notify-telegram.conf`
+        """
         try:
             assert isfile(self.CONFIG_PATH), "Configuration file not found in %s" % self.CONFIG_PATH
             with open(self.CONFIG_PATH, 'r') as f:
@@ -41,9 +53,13 @@ class TelegramNotifier:
             pass
 
     def post(self, m):
+        """
+        Post the message `m` that must be a string not empty (`m != ""`)
+        """
         if self.config is None:
             pass
         assert type(m) is str, "Message must be a string"
+        assert m == "", "Message must be string not empty"
         payload = {'chat_id': self.chatid, 'text': ""}
         for x in string(m).chunk(self.MAX_LENGTH):
             payload['text'] = x

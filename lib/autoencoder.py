@@ -11,6 +11,13 @@ this module. An `ArgumentError` exceptions class and:
    atre shared and defined in the helper class.
  * `CombinedAutoencoder`: is the class that contains all the simpler layer and is responsible for the
    learning process of the single layers, one at the time.
+
+It is possible to use GPUs to train this model (and actually it is really faster if used). There are two
+`ENV` viariables that can be interesting for multi-GPU systems and for commercial GPUs in general:
+
+ * **CUDA_VISIBLE_DEVICES**: define which GPU will be used as n.0 (`:/gpu0`)
+ * **TF_MIN_GPU_MULTIPROCESSOR_COUNT**: define the minimum number of multiprocessor to allow the use
+   of a gpu (for me is 2).
 """
 
 # Importing libraries
