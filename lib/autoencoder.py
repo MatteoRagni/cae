@@ -5,11 +5,11 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-# import numpy as np
+import numpy as np
 import tensorflow as tf
-
-
-FLAGS = tf.app.flags.FLAGS
+# import os
+# from glob import glob
+# import random
 
 
 class ArgumentError(ValueError):
@@ -25,28 +25,26 @@ class ArgumentError(ValueError):
 class ConvAutoEncSettings(object):
 
     def __init__(self):
-        self.__input_shape       = None
-        self.__corruption        = None
-        self.__corruption_min    = None  # 0
-        self.__corruption_max    = None  # 0
-        self.__depth_increasing  = None
-        self.__layers            = None
-        self.__patch_size        = None
-        self.__strides           = None
-        self.__padding           = None  # SAME / VALID
-        self.__residual_learning = None
-        self.__prefix_name       = None
+        self.__input_shape      = None
+        self.__corruption       = None
+        self.__corruption_min   = None  # 0
+        self.__corruption_max   = None  # 0
+        self.__depth_increasing = None
+        self.__layers           = None
+        self.__patch_size       = None
+        self.__strides          = None
+        self.__padding          = None  # SAME / VALID
+        self.__cuda_enabled     = None
 
     # Check methods
     def checkComplete(self):
-        if not(self.input_shape       is not None and
-               self.corruption        is not None and
-               self.layers            is not None and
-               self.patch_size        is not None and
-               self.strides           is not None and
-               self.padding           is not None and
-               self.residual_learning is not None and
-               self.prefix_name       is not None and
+        if not(self.input_shape      is not None and
+               self.corruption       is not None and
+               self.layers           is not None and
+               self.patch_size       is not None and
+               self.strides          is not None and
+               self.padding          is not None and
+               self.cuda_enabled     is not None and
                self.depth_increasing is not None):
             self._inspect()
             raise ArgumentError("Some of the element are not defined")
@@ -175,24 +173,14 @@ class ConvAutoEncSettings(object):
         self.__padding = value
 
     @property
-    def prefix_name(self):
-        return self.__prefix_name
+    def cuda_enabled(self):
+        return self.__cuda_enabled
 
-    @prefix_name.setter
-    def prefix_name(self, value):
-        if value:
-            self._checkStr(value)
-            self.__prefix_name = value
-
-    @property
-    def residual_learning(self):
-        return self.__residual_learning
-
-    @residual_learning.setter
-    def residual_learning(self, value):
+    @cuda_enabled.setter
+    def cuda_enabled(self, value):
         if value:
             self._checkBool(value)
-        self.__residual_learning = value
+        self.__cuda_enabled = value
 
     # Other methods
     def _checkType(self, obj, tp):
@@ -232,19 +220,18 @@ class ConvAutoEncSettings(object):
         print(self.__str__())
 
     def __str__(self):
-        return "  Convolutional Autoencoder Settings"                    + "\n" + \
-               "--------------------------------------"                  + "\n" + \
-               " - prefix_name       = {}".format(self.prefix_name)      + "\n" + \
-               " - input_shape       = {}".format(self.input_shape)      + "\n" + \
-               " - corruption        = {}".format(self.corruption)       + "\n" + \
-               " - corruption_min    = {}".format(self.corruption_min)   + "\n" + \
-               " - corruption_max    = {}".format(self.corruption_max)   + "\n" + \
-               " - layers            = {}".format(self.layers)           + "\n" + \
-               " - depth_increasing  = {}".format(self.depth_increasing) + "\n" + \
-               " - patch_size        = {}".format(self.patch_size)       + "\n" + \
-               " - strides           = {}".format(self.strides)          + "\n" + \
-               " - padding           = {}".format(self.padding)          + "\n" + \
-               " - residual learning = {}".format(self.residual_learning)
+        return "  Convolutional Autoencoder Settings"                   + "\n" + \
+               "--------------------------------------"                 + "\n" + \
+               " - input_shape      = {}".format(self.input_shape)      + "\n" + \
+               " - corruption       = {}".format(self.corruption)       + "\n" + \
+               " - corruption_min   = {}".format(self.corruption_min)   + "\n" + \
+               " - corruption_max   = {}".format(self.corruption_max)   + "\n" + \
+               " - layers           = {}".format(self.layers)           + "\n" + \
+               " - depth_increasing = {}".format(self.depth_increasing) + "\n" + \
+               " - patch_size       = {}".format(self.patch_size)       + "\n" + \
+               " - strides          = {}".format(self.strides)          + "\n" + \
+               " - padding          = {}".format(self.padding)          + "\n" + \
+               " - cuda_enabled     = {}".format(self.cuda_enabled)
 
 
 #   ___                 _      _   _              _       _                            _
@@ -261,8 +248,7 @@ class ConvAutoEnc(object):
 
         self.graph   = tf.Graph()
         self.x       = None
-        self.h_enc   = None
-        self.h_dec   = None
+        self.h       = None
         self.y       = None
         self.weights = None
         self.latents = None
@@ -295,10 +281,6 @@ class ConvAutoEnc(object):
                                                           maxval=self.corruption_max,
                                                           dtype=tf.int32)), name=name)
 
-    def set_graph(self, graph):
-        assert type(graph) is tf.Graph
-        self.graph = graph
-
     def leakRelu(self, x, alpha=0.2, name="leak-relu"):
         alpha_t = tf.constant(alpha, name=(name + "-constant"))
         with self.graph.as_default():
@@ -307,20 +289,20 @@ class ConvAutoEnc(object):
 
     def defineInput(self):
         with self.graph.as_default():
-            with tf.name_scope(self.prefix_name + "-input-layer"):
-                x = tf.placeholder(tf.float32, self.input_shape, name=self.prefix_name + '-x')
+            with tf.name_scope("input-layer"):
+                x = tf.placeholder(tf.float32, self.input_shape, name='x')
                 if self.corruption:
                     self.x = self._corrupt(x)
                 else:
                     self.x = x
-                self.add3summary(self.x, self.prefix_name + '-x')
+                self.add3summary(self.x, "x")
         return self
 
     def defineEncoder(self):
         if self.x is None:
             raise RuntimeError("You must define input to define the encoder")
         with self.graph.as_default():
-            with tf.name_scope(self.prefix_name + "-encoder"):
+            with tf.name_scope("encoder"):
                 self.weights = []
                 self.patches = []
                 self.latent  = []
@@ -335,11 +317,11 @@ class ConvAutoEnc(object):
                     self.shapes.append(x_current.get_shape().as_list())
 
                     # Naming
-                    name_W    = self.prefix_name + "-weight-%d"              % layer
-                    name_B    = self.prefix_name + "-enc-bias-%d"            % layer
-                    name_conv = self.prefix_name + "-encoder-convolution-%d" % layer
-                    name_sum  = self.prefix_name + "-encoder-sum-%d"         % layer
-                    name_out  = self.prefix_name + "-encoder-out-%d"         % layer
+                    name_W    = "weight-%d"              % layer
+                    name_B    = "enc-bias-%d"            % layer
+                    name_conv = "encoder-convolution-%d" % layer
+                    name_sum  = "encoder-sum-%d"         % layer
+                    name_out  = "encoder-out-%d"         % layer
 
                     W = tf.Variable(tf.truncated_normal(
                         patch, stddev=0.1), name=name_W)
@@ -352,14 +334,12 @@ class ConvAutoEnc(object):
 
                     h_layer = tf.add(
                         tf.nn.conv2d(x_current, W, strides=self.strides,
-                                     padding=self.padding, name=name_conv,
-                                     use_cudnn_on_gpu=FLAGS.gpu_enabled),
+                                     padding=self.padding, name=name_conv),
                         B, name=name_sum
                     )
                     x_current = self.leakRelu(h_layer, name=name_out)
-                self.h_enc = x_current
-                self.h_dec = self.h_enc
-                self.addXsummary(self.h_enc, self.prefix_name + '-h_enc')
+                self.h = x_current
+                self.addXsummary(self.h, "h")
                 # self.add2summary(self.h, "h")
 
         return self
@@ -391,18 +371,18 @@ class ConvAutoEnc(object):
             tf.image_summary(name_l, var[:, :, :, layer:layer + 1], max_images=batch)
 
     def defineDecoder(self):
-        if (self.x is None) or (self.h_dec is None):
+        if (self.x is None) or (self.x is None):
             raise RuntimeError("To define a decoder you must define the encoder")
         self.biases_decoder = []
         with self.graph.as_default():
-            with tf.name_scope(self.prefix_name + "-decoder"):
-                x_current = self.h_dec
+            with tf.name_scope("decoder"):
+                x_current = self.h
                 for current_layer in range(0, self.layers):
                     layer       = self.layers - (current_layer + 1)
-                    name_deconv = self.prefix_name + "-decoder-deconvolution-%i" % layer
-                    name_sum    = self.prefix_name + "-decoder-sum-%i"           % layer
-                    name_out    = self.prefix_name + "-decoder-out-%i"           % layer
-                    name_B      = self.prefix_name + "-dec-bias-%d"              % layer
+                    name_deconv = "decoder-deconvolution-%i" % layer
+                    name_sum    = "decoder-sum-%i"           % layer
+                    name_out    = "decoder-out-%i"           % layer
+                    name_B      = "dec-bias-%d"              % layer
 
                     W = self.weights[layer]
                     B = tf.Variable(tf.zeros([W.get_shape().as_list()[2]]), name=name_B)
@@ -413,39 +393,41 @@ class ConvAutoEnc(object):
                     shape = self.shapes[layer]
                     h_layer = self.leakRelu(tf.add(
                         tf.nn.conv2d_transpose(
-                            x_current, W, shape, strides=self.strides, padding=self.padding,
-                            name=name_deconv),
+                            x_current, W, shape, strides=self.strides, padding=self.padding, name=name_deconv),
                         B, name=name_sum
                     ))
                     x_current = self.leakRelu(h_layer, name=name_out)
-                if self.residual_learning:
-                    self.y = x_current + self.x
-                else:
-                    self.y = x_current
-                self.add3summary(self.y, self.prefix_name + '-y')
+                self.y = x_current + self.x # RESIDUAL LEARNING MODIFICATION
+                self.add3summary(self.y, "y")
         return self
 
     def defineCost(self):
         if (self.x is None) or (self.h is None) or (self.y is None):
             raise RuntimeError("You cannot define a cost, if you not define output")
         with self.graph.as_default():
-            with tf.name_scope(self.prefix_name + '-cost-function'):
+            with tf.name_scope("cost-function"):
                 self.error = tf.reduce_sum(
-                    tf.square(self.y - self.x), name=self.prefix_name + '-error-definition')
-                self.add1summary(self.error, self.prefix_name + '-error')
+                    tf.square(self.y - self.x), name="error-definition")
+                self.add1summary(self.error, "error")
         return self
 
+    def createSession(self, learning_rate=0.01):
+        assert type(learning_rate) is float, "Learning Rate must be a float"
+        assert learning_rate > 0, "Learning rate must be positive"
 
-class CombinedAutoencoder:
+        with self.graph.as_default():
+            with tf.name_scope("define-optimizer"):
+                self.optimizer = tf.train.AdamOptimizer(learning_rate).minimize(self.error)
+        self.session = tf.Session(graph=self.graph)
+        with self.session.as_default():
+            self.session.run(tf.initialize_all_variables())
+        return self
 
-    def __init__(self, config_tuple):
-        assert type(config_tuple) is tuple, "Required a tuple of ConvAutoEncSettings"
-        self.caes = []
-        for c in config_tuple:
-            assert type(c) is ConvAutoEncSettings, "Element in config tuple is not ConvAutoEncSettings"
-            self.caes.append(ConvAutoEnc(c))
-
-    def len(self):
-        return len(self.caes)
-
-    def
+    def trainBatch(self, training_tensor):
+        assert self.session is None, "Session is not initialized"
+        assert type(training_tensor) is np.ndarray, "Training tensor is not Numpy Tensor"
+        with self.session.as_default():
+            self.session.run(self.optimizer, feed_dict={self.x: training_tensor})
+            return {'cost': self.session.run(self.error, feed_dict={self.x: training_tensor}),
+                    'y': self.session.run(self.y, feed_dict={self.x: training_tensor}),
+                    'h': self.session.run(self.h, feed_dict={self.x: training_tensor})}
