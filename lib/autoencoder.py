@@ -22,9 +22,6 @@ from __future__ import print_function
 import tensorflow as tf
 
 
-FLAGS = tf.app.flags.FLAGS
-
-
 class ArgumentError(ValueError):
     """
     Helper class to make easier to understand when an
@@ -417,8 +414,63 @@ class ConvAutoEncSettings(object):
 # | (__/ _ \ ' \ V / _ \ | || |  _| / _ \ ' \   / _ \ || |  _/ _ \/ -_) ' \/ _/ _ \/ _` / -_) '_|
 #  \___\___/_||_\_/\___/_|\_,_|\__|_\___/_||_| /_/ \_\_,_|\__\___/\___|_||_\__\___/\__,_\___|_|
 class ConvAutoEnc(object):
+    """
+    This class implements a simple convolutional autoencoder block. This block may contains different
+    layers, and it is the the unit that is optimized. One single block is defined by an encoder mapping
+    $E(\cdot)$ and a decoder mapping $D(\cdot)$.
+
+    In particular:
+    $$
+    h_{E} = E(x)
+    $$
+    and
+    $$
+    y = D(h_{D})
+    $$
+    In optimization (learning), since we are only optimizing one single block at the time,
+    $$
+    h_{E} = h_{D}
+    $$
+    whilst, other blocks can be injected inside, thus leading to $h_{E} \neq{=} h_{D}$.
+
+    If more $n$ layers are requested, there will be multiple layers that will share the same configuration
+    in the form:
+    $$
+    E(\cdot) = (E_{n} \circ \dots \circ E_{1})(\cdot)
+    $$
+    and decoder in the form:
+    $$
+    D(\cdot) = (D_{n} \circ \dots \circ D_{1})(\cdot)
+    $$
+    For what concerns the single layers functions we have:
+    $$
+    E_{i}(\cdot) = \mathrm{LeakRelu}\left( \mathrm{Conv}(W_{i}, \cdot) + b_{E,i} \right)
+    $$
+    whilst the decoder is in the form:
+    $$
+    D_{i}(\cdot) = \mathrm{LeakRelu}\left( \mathrm{Deconv}(W^{T}_{i}, \cdot) + b_{D,i} \right)
+    $$
+    (the weights in the two operations are shared, in trasposed version). Interfaces of the block are:
+
+     * `x`: input placeholder
+     * `y`: output op
+     * `h_enc`: innest layer op
+     * `h_dec`: decoder input (it should be an op)
+     * `weights`: a list of variables (weights for each encoding level)
+     * `biases_encoder`: a list of biases variable for the encoder
+     * `biases_decoder`: a list of biases for the decoder
+
+    """
 
     def __init__(self, settings):
+        """
+        Initializes the block, using the helper class `ConvAutoEncSettings`, that contains all
+        about the current block configuration. The use of **GPU** is defined on the basis of the
+        application `FLAGS` variables.
+        _Please consider that all high level attribute (withoust leading `__`) are inherit in this
+        class as first level citizen, and accessible directly, but cannot be modified after object
+        instanciation.
+        """
         assert type(
             settings) is ConvAutoEncSettings, "Settings are not of type ConvAutoSettings"
         self.settings = settings
@@ -430,7 +482,6 @@ class ConvAutoEnc(object):
         self.h_dec   = None
         self.y       = None
         self.weights = None
-        self.latents = None
         self.error   = None
 
         self.biases_encoder  = None
@@ -444,15 +495,22 @@ class ConvAutoEnc(object):
         self.defineEncoder()
         self.defineDecoder()
         self.defineCost()
-        # self.createSession()
 
     def __getattribute__(self, key):
+        """Exposes all getter of the `ConvAutoEncSettings` in this class"""
         try:
             return super(ConvAutoEnc, self).__getattribute__('settings').__getattribute__(key)
         except AttributeError:
             return super(ConvAutoEnc, self).__getattribute__(key)
 
     def _corrupt(self, x, name="corruption"):
+        """
+        Corruption of a signal (helper function).
+
+        The corruption is a multiplication between a ramdomly sampled tensor from an uniform
+        distribution, with minimum value `corruption_min` and maximum value `corruption_max`
+        The corruption acts as a simplified dropout layer.
+        """
         with self.graph.as_default():
             with tf.name_scope("corruption"):
                 return tf.mul(x, tf.cast(tf.random_unifor(shape=tf.shape(x),
@@ -461,16 +519,32 @@ class ConvAutoEnc(object):
                                                           dtype=tf.int32)), name=name)
 
     def set_graph(self, graph):
+        """
+        Change the current `tf.Graph` (dafault: requested on object instantiation) with another one
+        """
         assert type(graph) is tf.Graph
         self.graph = graph
 
     def leakRelu(self, x, alpha=0.2, name="leak-relu"):
+        """
+        The leaking relu is defined as follow:
+        $$
+        y = \dfrac{1}{2} \left( \alpha\,x + (1-\alpha)\,x \right)
+        $$
+
+        Options are $\alpha$ value and a name for the operation (`str`).
+        """
+        assert type(alpha) is float, "alpha must be a float"
+        assert type(name) is str, "name must be a str"
         alpha_t = tf.constant(alpha, name=(name + "-constant"))
         with self.graph.as_default():
             with tf.name_scope(name):
                 return 0.5 * ((1 + alpha_t) * x + (1 - alpha_t) * abs(x))
 
     def defineInput(self):
+        """
+        Creates the input placeholder and corruption operations if required
+        """
         with self.graph.as_default():
             with tf.name_scope(self.prefix_name + "-input-layer"):
                 x = tf.placeholder(tf.float32, self.input_shape, name=self.prefix_name + '-x')
@@ -482,6 +556,9 @@ class ConvAutoEnc(object):
         return self
 
     def defineEncoder(self):
+        """
+        Construct the encoder graph. Also assign `h_dec` as `h_enc`
+        """
         if self.x is None:
             raise RuntimeError("You must define input to define the encoder")
         with self.graph.as_default():
@@ -518,7 +595,7 @@ class ConvAutoEnc(object):
                     h_layer = tf.add(
                         tf.nn.conv2d(x_current, W, strides=self.strides,
                                      padding=self.padding, name=name_conv,
-                                     use_cudnn_on_gpu=FLAGS.gpu_enabled),
+                                     use_cudnn_on_gpu=self.FLAGS.gpu_enabled),
                         B, name=name_sum
                     )
                     x_current = self.leakRelu(h_layer, name=name_out)
@@ -530,17 +607,26 @@ class ConvAutoEnc(object):
         return self
 
     def add1summary(self, var, name):
+        """
+        Add scalar elements to the summary, using name defined
+        """
         assert type(name) is str, "Name must be a string"
         with tf.name_scope("summaries"):
             tf.scalar_summary(name, var)
 
     def add2summary(self, var, name):
+        """
+        Add histogram elements to the summary, using name defined
+        """
         assert type(name) is str, "Name must be a string"
         with tf.name_scope("summaries"):
             pass
             tf.histogram_summary(name, var)
 
     def add3summary(self, var, name, batch=1):
+        """
+        Add image elements to the summary, using name defined
+        """
         assert type(name) is str, "Name must be a string"
         assert type(batch) is int, "batch size must be an integer"
         assert batch > 0, "batch size must be positive"
@@ -548,6 +634,11 @@ class ConvAutoEnc(object):
             tf.image_summary(name, var, max_images=batch)
 
     def addXsummary(self, var, name, batch=1):
+        """
+        Add multi-dimensional elements to the summary, using name defined, and with `batch`
+        samples from the batch dimension. The different dimension will be added as a monochromatic
+        images, splitting layers by a numeric suffix.
+        """
         assert type(name) is str, "Name must be a string"
         assert type(batch) is int, "batch size must be a integer"
         assert batch > 0, "batch size must be positive"
@@ -556,6 +647,10 @@ class ConvAutoEnc(object):
             tf.image_summary(name_l, var[:, :, :, layer:layer + 1], max_images=batch)
 
     def defineDecoder(self):
+        """
+        Defines the decoder layer. At the end defines also `y` to reflect residual learning
+        or not.
+        """
         if (self.x is None) or (self.h_dec is None):
             raise RuntimeError("To define a decoder you must define the encoder")
         self.biases_decoder = []
@@ -591,6 +686,10 @@ class ConvAutoEnc(object):
         return self
 
     def defineCost(self):
+        """
+        Define the cost function that must be otpimized for this block, as minimization
+        of the sum on the square error between input and output.
+        """
         if (self.x is None) or (self.h is None) or (self.y is None):
             raise RuntimeError("You cannot define a cost, if you not define output")
         with self.graph.as_default():
