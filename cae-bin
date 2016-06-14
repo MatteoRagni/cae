@@ -31,7 +31,7 @@ DEFAULT_BATCH_SIZE    = 10
 DEFAULT_STEP_SIZE     = 10
 DEFAULT_LEARN_RATE    = 0.01
 VERBOSITY             = 1
-BATCH_LIMIT           = 10
+BATCH_LIMIT           = 7
 
 # TODO: Modify run and training dir to add a single
 # voice to define the path, and another to define the run.
@@ -101,8 +101,6 @@ import numpy as np
 import tensorflow as tf
 import autoencoder
 
-def load_json(file):
-    
 
 # Some definitions on the engine
 FLAGS = tf.app.flags.FLAGS
@@ -135,10 +133,10 @@ tf.app.flags.DEFINE_float('learning_rate',
 # To get a preview of the options that can be set, print(sets)
 sets = autoencoder.ConvAutoEncSettings()
 sets.prefix_name = "test"
-sets.input_shape = [FLAGS.batch_size, 227, 227, 1]
+sets.input_shape = [FLAGS.batch_size, 193, 193, 1]
 sets.corruption = False
 sets.layers = 1
-sets.patch_size = 29
+sets.patch_size = 32
 sets.strides = [1, 2, 2, 1]
 sets.padding = 'SAME'
 sets.depth_increasing = 2
@@ -175,9 +173,7 @@ with open(FLAGS.dataset_file, "rb") as f:
             # Creating srm -rf /tmp/training-nnession objects
             merged = tf.merge_all_summaries()
             writer = tf.train.SummaryWriter(FLAGS.train_dir, session.graph)
-            result = [NoHi David,
-
-I'm thinking about the actual physical architecture of the network. We have already fixed the fact that the single ne, 10e4]
+            result = [None, 9999.9999]
 
             # Training mrm -rf /tmp/training-nnain loop. It is a nested loop of three loops
             #  1. dataset reading from file loop

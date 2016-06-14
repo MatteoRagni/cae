@@ -697,13 +697,13 @@ class ConvAutoEnc(object):
         The corruption acts as a simplified dropout layer.
 
         :param x: tensor to be corrupted
-        :type x: tensorflow.Tensor
+        :type x: tensorflow.Tensor, tensorflow.Variable
         :param name: a string to identify the op on the Tensorboard visualization
         :param type: str
         :returns: tensorflow.Tensor
         :raises: AssertionError
         """
-        assert type(x) is tf.Tensor, "x  must be a tf.Tensor"
+        assert type(x) is tf.Tensor or type(x) is tf.Variable, "x  must be a tf.Tensor"
         assert type(name) is str, "name must be a str"
         with self.graph.as_default():
             with tf.name_scope(name):
@@ -830,7 +830,7 @@ class ConvAutoEnc(object):
         :type name: str
         :raises: AssertionError
         """
-        assert type(var) is tf.Tensor, "var must be a tf.Tensor"
+        assert type(var) is tf.Tensor or type(var) is tf.Variable, "var must be a tf.Tensor"
         assert type(name) is str, "Name must be a string"
         with tf.name_scope("summaries"):
             tf.scalar_summary(name, var)
@@ -840,12 +840,12 @@ class ConvAutoEnc(object):
         Add histogram elements to the summary, using name defined
 
         :param var: the variable to add to the summary
-        :type var: tensorflow.Tensor
+        :type var: tensorflow.Tensor, tensorflow.Variable
         :param name: the name to be assigned in the summary
         :type name: str
         :raises: AssertionError
         """
-        assert type(var) is tf.Tensor, "var must be a tf.Tensor"
+        assert type(var) is tf.Tensor or type(var) is tf.Variable, "var must be a tf.Tensor"
         assert type(name) is str, "Name must be a string"
         with tf.name_scope("summaries"):
             pass
@@ -856,14 +856,14 @@ class ConvAutoEnc(object):
         Add image elements to the summary, using name defined
 
         :param var: the variable to add to the summary
-        :type var: tensorflow.Tensor
+        :type var: tensorflow.Tensor, tensorflow.Variable
         :param name: the name to be assigned in the summary
         :type name: str
         :param batch: number of elements to sample from the batch dimension
         :type batch: int
         :raises: AssertionError
         """
-        assert type(var) is tf.Tensor, "var must be a tf.Tensor"
+        assert type(var) is tf.Tensor or type(var) is tf.Variable, "var must be a tf.Tensor"
         assert type(name) is str, "Name must be a string"
         assert type(batch) is int, "batch size must be an integer"
         assert batch > 0, "batch size must be positive"
@@ -877,14 +877,14 @@ class ConvAutoEnc(object):
         images, splitting layers by a numeric suffix.
 
         :param var: the variable to add to the summary
-        :type var: tensorflow.Tensor
+        :type var: tensorflow.Tensor, tensorflow.Variable
         :param name: the name to be assigned in the summary
         :type name: str
         :param batch: number of elements to sample from the batch dimension
         :type batch: int
         :raises: AssertionError
         """
-        assert type(var) is tf.Tensor, "var must be a tf.Tensor"
+        assert type(var) is tf.Tensor or type(var) is tf.Variable, "var must be a tf.Tensor"
         assert type(name) is str, "Name must be a string"
         assert type(batch) is int, "batch size must be a integer"
         assert batch > 0, "batch size must be positive"
@@ -943,7 +943,7 @@ class ConvAutoEnc(object):
         :raises: RuntimeError
         :returns: :class:`ConvAutoEnc` current instance
         """
-        if (self.x is None) or (self.h is None) or (self.y is None):
+        if (self.x is None) or (self.h_enc is None) or (self.y is None):
             raise RuntimeError("You cannot define a cost, if you not define output")
         with self.graph.as_default():
             with tf.name_scope(self.prefix_name + '-cost-function'):
