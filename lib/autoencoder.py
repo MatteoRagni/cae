@@ -17,13 +17,11 @@ this module. An :class:`ArgumentError` exceptions class and:
    learning process of the single layers, one at the time.
 
 It is possible to use GPUs to train this model (and actually it is really faster if used). There are two
-`ENV` variables that can be interesting for multi-GPU systems and for commercial GPUs in general:
+environment variables that can be interesting for multi-GPU systems and for commercial GPUs in general:
 
-* **CUDA_VISIBLE_DEVICES**: define which GPU will be used as n.0 (`:/gpu0`)
-* **TF_MIN_GPU_MULTIPROCESSOR_COUNT**: define the minimum number of multiprocessor to allow the use
+* **``CUDA_VISIBLE_DEVICES``**: define which GPU will be used as n.0 (``:/gpu0``)
+* **``TF_MIN_GPU_MULTIPROCESSOR_COUNT``**: define the minimum number of multiprocessor to allow the use
   of a gpu (for me is 2).
-
-:warning: Check alignment in the setters!
 
 .. :moduleauthor: Matteo Ragni
 """
@@ -125,7 +123,7 @@ class ConvAutoEncSettings(object):
 
         **Property setter**:
 
-        Requires a `list` of positive `int` greater than zero as input.
+        Requires a ``list`` of positive ``int`` greater than zero as input.
         **Please note that image width and image height must be equal**.
 
         :param value: the input shape
@@ -159,8 +157,8 @@ class ConvAutoEncSettings(object):
 
         **Property setter**
 
-        It requires a boolean value. If `False`,
-        automatically sets `corruption_min` and `corruption_max` to 0.
+        It requires a boolean value. If ``False``,
+        automatically sets ``corruption_min`` and ``corruption_max`` to 0.
 
         :param value: corruption setting
         :type value: bool
@@ -191,7 +189,7 @@ class ConvAutoEncSettings(object):
         **Property setter**
 
         Please be aware that this value
-        must be smaller than `corruption_max`, if set, or an error will be raised. It must be a float.
+        must be smaller than ``corruption_max``, if set, or an error will be raised. It must be a float.
 
         :param value: corruption setting, minimum value
         :type value: float
@@ -224,7 +222,7 @@ class ConvAutoEncSettings(object):
         **Property setter**
 
         Please be aware that this value
-        must be greater than `corruption_min`, if set, or an error will be raised. It must be a float.
+        must be greater than ``corruption_min``, if set, or an error will be raised. It must be a float.
 
         :param value: corruption setting, maximum value
         :type value: float
@@ -289,7 +287,7 @@ class ConvAutoEncSettings(object):
         **Property setter**
 
         Sets the convolutional weigths tensor patch (the two inner dimensions). Must
-        be an `int` greater than one.
+        be an ``int`` greater than one.
 
         :param value: patch size
         :type value: int
@@ -314,7 +312,7 @@ class ConvAutoEncSettings(object):
 
         Returns the increasing depth. Final depth of the filter will be:
         $$
-        \\mathrm{output\\_size} = \\mathrm{input\_size} + \\mathrm{depth\\_increasing}
+        \\mathrm{output\\_size} = \\mathrm{input\\_size} + \\mathrm{depth\\_increasing}
         $$
 
         :returns: int -- the increasing in depth of the block
@@ -357,7 +355,7 @@ class ConvAutoEncSettings(object):
 
         **Property setter**
 
-        It should be a list with four positive `int`,
+        It should be a list with four positive ``int``,
         greater than 0
 
         :param value: strides
@@ -382,16 +380,16 @@ class ConvAutoEncSettings(object):
         """
         **Property getter**
 
-        The padding configuration is a string (`SAME` or `VALID`)
+        The padding configuration is a string (``SAME`` or ``VALID``)
 
         :returns: str - padding configuration
 
         **Property setter**
 
-        The padding property is a string in the form `SAME` or `VALID`:
+        The padding property is a string in the form ``SAME`` or ``VALID``:
 
-         * `SAME`: Round up (partial windows are included)
-         * `VALID`: Round down (only full size windows are considered).
+         * ``SAME``: Round up (partial windows are included)
+         * ``VALID``: Round down (only full size windows are considered).
 
         :param value: padding string
         :type value: str
@@ -416,7 +414,7 @@ class ConvAutoEncSettings(object):
         **Property getter**
 
         Prefix name for this particular layer. It will be usefull to identify it inside
-        the TensorBoard visualization tool (will be used in front of all `name` property)
+        the TensorBoard visualization tool (will be used in front of all ``name`` property)
 
         :returns: str -- actual prefix name used
 
@@ -444,11 +442,11 @@ class ConvAutoEncSettings(object):
         r"""
         **Property getter**
 
-        Defines the nature of the learning. If this flag is `False`, the objective funtion in
+        Defines the nature of the learning. If this flag is ``False``, the objective funtion in
         $$
         \\mathrm{min}\\,(y - x)^2 = \\mathrm{min}\\,(D(E(x)) - x)^2
         $$
-        while, if `True`, it will try to learn:
+        while, if ``True``, it will try to learn:
         $$
         \\mathrm{min}\\,(D(E(x)) + x - x)^2 = \\mathrm{min}\\,(D(E(x)))^2
         $$
@@ -456,7 +454,7 @@ class ConvAutoEncSettings(object):
 
         **Property setter**
 
-        Define if learning the residuals: requires a `bool` ad input. If true, the learning
+        Define if learning the residuals: requires a ``bool`` ad input. If true, the learning
         will be on the residuals.
 
         :param value: activate residuals learning
@@ -476,7 +474,7 @@ class ConvAutoEncSettings(object):
     # Other methods
     def _checkType(self, obj, tp):
         r"""
-        Helper function, check with an `assert` the type specified.
+        Helper function, check with an :func:`assert` the type specified.
 
         :param obj: object to be tested
         :param tp: type to be checked against
@@ -488,7 +486,7 @@ class ConvAutoEncSettings(object):
 
     def _checkStr(self, obj):
         r"""
-        `str` check helper function
+        ``str`` check helper function
 
         :param obj: object to be tested
         :returns: bool
@@ -498,7 +496,7 @@ class ConvAutoEncSettings(object):
 
     def _checkInt(self, obj):
         r"""
-        `int` check helper function
+        ``int`` check helper function
 
         :param obj: object to be tested
         :returns: bool
@@ -508,7 +506,7 @@ class ConvAutoEncSettings(object):
 
     def _checkFloat(self, obj):
         r"""
-        `float` check helper function
+        ``float`` check helper function
 
         :param obj: object to be tested
         :returns: bool
@@ -518,7 +516,7 @@ class ConvAutoEncSettings(object):
 
     def _checkBool(self, obj):
         r"""
-        `bool` check helper function
+        ``bool`` check helper function
 
         :param obj: object to be tested
         :returns: bool
@@ -528,7 +526,7 @@ class ConvAutoEncSettings(object):
 
     def _checkList(self, obj, size=0):
         r"""
-        `list` check helper function. If specified check also size.
+        ``list`` check helper function. If specified check also size.
 
         :param obj: object to be tested
         :param size: size of the list
@@ -545,7 +543,7 @@ class ConvAutoEncSettings(object):
 
     def _checkHash(self, obj, keylist=None):
         r"""
-        `dict` check helper function. If specified a list of keys specifies also the presence
+        ``dict`` check helper function. If specified a list of keys specifies also the presence
         of all the keys in the dictionary.
 
         :param obj: object to be tested
@@ -566,12 +564,12 @@ class ConvAutoEncSettings(object):
         return True
 
     def _inspect(self):
-        """Inspect function. Print `__str__` on screen"""
+        """Inspect function. Print :func:`__str__` on screen"""
         print(self.__str__())
 
     def __str__(self):
         """
-        Convert object into `str`
+        Convert object into ``str``
 
         :returns: str -- the string that represents the object
         """
@@ -612,7 +610,7 @@ class ConvAutoEnc(object):
     $$
     h_{E} = h_{D}
     $$
-    whilst, other blocks can be injected inside, thus leading to \\(h_{E} \\neq{=} h_{D}\\).
+    whilst, other blocks can be injected inside, thus leading to \\(h_{E} \\neq h_{D}\\).
 
     If more \\(n\\) layers are requested, there will be multiple layers that will share the same configuration
     in the form:
@@ -633,21 +631,21 @@ class ConvAutoEnc(object):
     $$
     (the weights in the two operations are shared, in trasposed version). Interfaces of the block are:
 
-     * `x`: input placeholder
-     * `y`: output op
-     * `h_enc`: innest layer op
-     * `h_dec`: decoder input (it should be an op)
-     * `weights`: a list of variables (weights for each encoding level)
-     * `biases_encoder`: a list of biases variable for the encoder
-     * `biases_decoder`: a list of biases for the decoder
+     * :py:attr:`~x`: input placeholder
+     * :py:attr:`~y`: output op
+     * :py:attr:`~h_enc`: innest layer op
+     * :py:attr:`~h_dec`: decoder input (it should be an op)
+     * :py:attr:`~weights`: a list of variables (weights for each encoding level)
+     * :py:attr:`~biases_encoder`: a list of biases variable for the encoder
+     * :py:attr:`~biases_decoder`: a list of biases for the decoder
     """
 
     def __init__(self, settings):
         r"""
-        Initializes the block, using the helper class `ConvAutoEncSettings`, that contains all
+        Initializes the block, using the helper class :class:`ConvAutoEncSettings`, that contains all
         about the current block configuration. The use of **GPU** is defined on the basis of the
-        application `FLAGS` variables.
-        _Please consider that all high level attribute (withoust leading `__`) are inherit in this
+        application :py:attr:`~FLAGS` variables.
+        _Please consider that all high level attribute (withoust leading ``__``) are inherit in this
         class as first level citizen, and accessible directly, but cannot be modified after object
         instanciation.
 
@@ -703,7 +701,7 @@ class ConvAutoEnc(object):
         :param name: a string to identify the op on the Tensorboard visualization
         :param type: str
         :returns: tensorflow.Tensor
-        :raise: AssertionError
+        :raises: AssertionError
         """
         assert type(x) is tf.Tensor, "x  must be a tf.Tensor"
         assert type(name) is str, "name must be a str"
@@ -714,14 +712,14 @@ class ConvAutoEnc(object):
                                                           maxval=self.corruption_max,
                                                           dtype=tf.int32)))
 
-    def set_graph(self, graph):
+    def setGraph(self, graph):
         r"""
         Change the current `tf.Graph` (dafault: requested on object instantiation) with another one
 
         :param graph: the new graph
         :type graph: tf.Graph
         :returns: :class:`ConvAutoEnc` current instance
-        :raise: AssertionError
+        :raises: AssertionError
         """
         assert type(graph) is tf.Graph
         self.graph = graph
@@ -734,7 +732,14 @@ class ConvAutoEnc(object):
         y = \\dfrac{1}{2} \\, \\left( \\alpha\\,x + (1-\\alpha)\\,x \\right)
         $$
 
-        :params x:
+        :param x: the input tensor of the relu module
+        :type x: tensorflow.Tensor
+        :param alpha: the actual \\(\\alpha\\)
+        :type alpha: float
+        :param name: name for the op
+        :type name: str
+        :returns: tensorflow.Tensor
+        :raises: AssertionError
         """
         assert type(x) is tf.Tensor, "x must be a tensorflow.Tensor"
         assert type(alpha) is float, "alpha must be a float"
@@ -745,8 +750,11 @@ class ConvAutoEnc(object):
                 return 0.5 * ((1 + alpha_t) * x + (1 - alpha_t) * abs(x))
 
     def defineInput(self):
-        """
-        Creates the input placeholder and corruption operations if required
+        r"""
+        Creates the input placeholder and corruption operations if required. Input is added
+        to the summary
+
+        :returns: :class:`ConvAutoEnc` current instance
         """
         with self.graph.as_default():
             with tf.name_scope(self.prefix_name + "-input-layer"):
@@ -755,12 +763,16 @@ class ConvAutoEnc(object):
                     self.x = self._corrupt(x)
                 else:
                     self.x = x
+                # TODO to make this work it is necessary to change the next line
                 self.add3summary(self.x, self.prefix_name + '-x')
         return self
 
     def defineEncoder(self):
-        """
+        r"""
         Construct the encoder graph. Also assign `h_dec` as `h_enc`
+
+        :returns: :class:`ConvAutoEnc` current instance
+        :raises: RuntimeError
         """
         if self.x is None:
             raise RuntimeError("You must define input to define the encoder")
@@ -806,30 +818,52 @@ class ConvAutoEnc(object):
                 self.h_dec = self.h_enc
                 self.addXsummary(self.h_enc, self.prefix_name + '-h_enc')
                 # self.add2summary(self.h, "h")
-
         return self
 
     def add1summary(self, var, name):
-        """
+        r"""
         Add scalar elements to the summary, using name defined
+
+        :param var: the variable to add to the summary
+        :type var: tensorflow.Tensor
+        :param var: the name to be assigned in the summary
+        :type name: str
+        :raises: AssertionError
         """
+        assert type(var) is tf.Tensor, "var must be a tf.Tensor"
         assert type(name) is str, "Name must be a string"
         with tf.name_scope("summaries"):
             tf.scalar_summary(name, var)
 
     def add2summary(self, var, name):
-        """
+        r"""
         Add histogram elements to the summary, using name defined
+
+        :param var: the variable to add to the summary
+        :type var: tensorflow.Tensor
+        :param name: the name to be assigned in the summary
+        :type name: str
+        :raises: AssertionError
         """
+        assert type(var) is tf.Tensor, "var must be a tf.Tensor"
         assert type(name) is str, "Name must be a string"
         with tf.name_scope("summaries"):
             pass
             tf.histogram_summary(name, var)
 
     def add3summary(self, var, name, batch=1):
-        """
+        r"""
         Add image elements to the summary, using name defined
+
+        :param var: the variable to add to the summary
+        :type var: tensorflow.Tensor
+        :param name: the name to be assigned in the summary
+        :type name: str
+        :param batch: number of elements to sample from the batch dimension
+        :type batch: int
+        :raises: AssertionError
         """
+        assert type(var) is tf.Tensor, "var must be a tf.Tensor"
         assert type(name) is str, "Name must be a string"
         assert type(batch) is int, "batch size must be an integer"
         assert batch > 0, "batch size must be positive"
@@ -837,11 +871,20 @@ class ConvAutoEnc(object):
             tf.image_summary(name, var, max_images=batch)
 
     def addXsummary(self, var, name, batch=1):
-        """
+        r"""
         Add multi-dimensional elements to the summary, using name defined, and with `batch`
         samples from the batch dimension. The different dimension will be added as a monochromatic
         images, splitting layers by a numeric suffix.
+
+        :param var: the variable to add to the summary
+        :type var: tensorflow.Tensor
+        :param name: the name to be assigned in the summary
+        :type name: str
+        :param batch: number of elements to sample from the batch dimension
+        :type batch: int
+        :raises: AssertionError
         """
+        assert type(var) is tf.Tensor, "var must be a tf.Tensor"
         assert type(name) is str, "Name must be a string"
         assert type(batch) is int, "batch size must be a integer"
         assert batch > 0, "batch size must be positive"
@@ -850,9 +893,12 @@ class ConvAutoEnc(object):
             tf.image_summary(name_l, var[:, :, :, layer:layer + 1], max_images=batch)
 
     def defineDecoder(self):
-        """
+        r"""
         Defines the decoder layer. At the end defines also `y` to reflect residual learning
         or not.
+
+        :raises: RuntimeError
+        :returns: :class:`ConvAutoEnc` current instance
         """
         if (self.x is None) or (self.h_dec is None):
             raise RuntimeError("To define a decoder you must define the encoder")
@@ -885,13 +931,17 @@ class ConvAutoEnc(object):
                     self.y = x_current + self.x
                 else:
                     self.y = x_current
+                # TODO to make this work it is necessary to change the next line
                 self.add3summary(self.y, self.prefix_name + '-y')
         return self
 
     def defineCost(self):
-        """
+        r"""
         Define the cost function that must be otpimized for this block, as minimization
         of the sum on the square error between input and output.
+
+        :raises: RuntimeError
+        :returns: :class:`ConvAutoEnc` current instance
         """
         if (self.x is None) or (self.h is None) or (self.y is None):
             raise RuntimeError("You cannot define a cost, if you not define output")

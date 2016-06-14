@@ -154,7 +154,7 @@ html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
 # The name of an image file (relative to this directory) to place at the top
 # of the sidebar.
 #
-# html_logo = None
+html_logo = '_static/joint_logo.png'
 
 # The name of an image file (relative to this directory) to use as a favicon of
 # the docs.  This file should be a Windows icon file (.ico) being 16x16 or 32x32
@@ -211,7 +211,7 @@ html_static_path = ['_static']
 
 # If true, "Created using Sphinx" is shown in the HTML footer. Default is True.
 #
-# html_show_sphinx = True
+html_show_sphinx = False
 
 # If true, "(C) Copyright ..." is shown in the HTML footer. Default is True.
 #

@@ -21,7 +21,7 @@ Convolutional Auto Encoder module
 Basic Block representation
 --------------------------
 .. autoclass:: autoencoder.ConvAutoEnc
-   :members:
+   :members: __init__, _corrupt, setGraph, leakRelu, defineInput, defineEncoder, defineDecoder, defineCost, add1summary, add2summary, add3summary, addXsummary
 
 Configuration class
 -------------------
@@ -31,6 +31,11 @@ Configuration class
 Utilities
 ---------
 .. autoclass:: autoencoder.ArgumentError
+
+.. autoclass:: tg_notifier.TelegramNotifier
+   :members: __init__, post
+
+.. autoclass:: timer.Timer
 
 Indices and tables
 ------------------

@@ -1,8 +1,15 @@
 #!/usr/bin/env python3
 
-"""
+r"""
+.. module:: tg_notifier
+   :platform: Linux
+   :synopsis: Simplest Telegram notifier ever
+
 This module implements a really simple Bot notifier on Telegram service.
-The configuration file must be in: `/etc/notify-telegram.conf`
+The configuration file must be in: `/etc/notify-telegram.conf`. It is used
+in case of very long simulations.
+
+.. :moduleauthor: Matteo Ragni
 """
 
 import requests
@@ -11,24 +18,42 @@ import yaml
 
 
 class string(str):
-    """
-    String splitter based on length
+    r"""
+    Expansion of the :class:`str`.
     """
     def chunk(self, length):
+        r"""
+        String splitter based on length
+
+        :param length: splitting length
+        :param type: int
+        :returns: :class:`string` current instance
+        :raises: AssertionError
+        """
         assert type(length) is int, "Chunk lenght must be an int. Received a %s" % type(length)
         assert length > 0, "Chunk lenght must be positive. Received %d" % length
         for i in range(0, len(self), length):
             yield self[i:i + length]
+        return self
 
 
 class TelegramNotifier:
+    r"""
+    A very simple notification tool on Telegram. It uses as configuration a YAML file that is
+    usually stored in ``/etc/notify-telegram.conf``. The message are of maximum 4090 chars. Longer
+    messages are automatically splitted in multiple messages.
+    """
     CONFIG_PATH = '/etc/notify-telegram.conf'
-    MAX_LENGTH  = 3000
+    MAX_LENGTH  = 4090
 
     def __init__(self):
         """
         Initialize the telegram notifier object using options defined in the configuration
         YAML file: `/etc/notify-telegram.conf`
+
+        If some `Exception` is raised, the will be loaded as dummy (:py:attr:`pass` an all methods).
+
+        :returns: :class:`TelegramNotifier` new instance
         """
         try:
             assert isfile(self.CONFIG_PATH), "Configuration file not found in %s" % self.CONFIG_PATH
@@ -54,7 +79,12 @@ class TelegramNotifier:
 
     def post(self, m):
         """
-        Post the message `m` that must be a string not empty (`m != ""`)
+        Post the message `m` that must be a string not empty (`m != ""`). If the message is longer
+        than 4090 characters, than it will be splitted in more messages automatically
+
+        :param m: message to be sent
+        :type m: str
+        :raises: AssertionError
         """
         if self.config is None:
             pass
