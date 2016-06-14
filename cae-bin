@@ -15,6 +15,7 @@ import pdb
 import os
 from timer import Timer
 from timer import timestring
+import json
 from argparse import ArgumentParser
 
 # PARSING COMMAND LINE ARGUMENTS
@@ -32,6 +33,9 @@ DEFAULT_LEARN_RATE    = 0.01
 VERBOSITY             = 1
 BATCH_LIMIT           = 10
 
+# TODO: Modify run and training dir to add a single
+# voice to define the path, and another to define the run.
+
 cmd.add_argument('-in', dest='dataset', type=str, nargs=1, required=True,
                  help='Input dataset for the training')
 cmd.add_argument('-gpu', dest='gpu', action='store_true',
@@ -48,6 +52,8 @@ cmd.add_argument('-lr', '--learnrate', dest='learnrate', type=float, nargs=1, de
                  help='Define the learning rate for the optimizer [%f]' % DEFAULT_LEARN_RATE)
 cmd.add_argument('-v', '--verbosity', dest='verb', type=int, nargs=1, default=VERBOSITY,
                  help='Define verbosity level, from 0 to 3 [%d]' % VERBOSITY)
+cmd.add_argument('-rl', '--residual-learning', dest='residuals', action='store_true',
+                 help='Enable residual learning (NO -> y = f(g(x)), YES -> y = f(g(x)) + x) [NO]')
 cmd.add_argument('-tg', '--telegram', dest='telegram', action='store_true',
                  help='Enable notifications using system telegram bot [NO]')
 cmd_args = cmd.parse_args()
@@ -95,6 +101,9 @@ import numpy as np
 import tensorflow as tf
 import autoencoder
 
+def load_json(file):
+    
+
 # Some definitions on the engine
 FLAGS = tf.app.flags.FLAGS
 tf.app.flags.DEFINE_string('dataset_file',
@@ -115,6 +124,9 @@ tf.app.flags.DEFINE_integer('batch_size',
 tf.app.flags.DEFINE_boolean('log_device_placement',
                             DEVICE_PLACEMENT_LOG,
                             "Logging of the use of my device")
+tf.app.flags.DEFINE_boolean('gpu_enabled',
+                            cmd_args.gpu,
+                            "Enables the use of GPU for Convolutions")
 tf.app.flags.DEFINE_float('learning_rate',
                           cmd_args.learnrate,
                           "Optimizer learning rate")
@@ -122,6 +134,7 @@ tf.app.flags.DEFINE_float('learning_rate',
 # Define configurations for the Convolutional Autoencoder
 # To get a preview of the options that can be set, print(sets)
 sets = autoencoder.ConvAutoEncSettings()
+sets.prefix_name = "test"
 sets.input_shape = [FLAGS.batch_size, 227, 227, 1]
 sets.corruption = False
 sets.layers = 1
@@ -129,7 +142,7 @@ sets.patch_size = 29
 sets.strides = [1, 2, 2, 1]
 sets.padding = 'SAME'
 sets.depth_increasing = 2
-sets.cuda_enabled = cmd_args.gpu
+sets.residual_learning = cmd_args.residuals
 
 def batch_loop(length):
     for i in range(0, length//FLAGS.batch_size):
@@ -162,7 +175,9 @@ with open(FLAGS.dataset_file, "rb") as f:
             # Creating srm -rf /tmp/training-nnession objects
             merged = tf.merge_all_summaries()
             writer = tf.train.SummaryWriter(FLAGS.train_dir, session.graph)
-            result = [None, 10e4]
+            result = [NoHi David,
+
+I'm thinking about the actual physical architecture of the network. We have already fixed the fact that the single ne, 10e4]
 
             # Training mrm -rf /tmp/training-nnain loop. It is a nested loop of three loops
             #  1. dataset reading from file loop

@@ -1,12 +1,31 @@
+#!/usr/bin/env python3
+
 import time
 
 
 def timestring():
+    """
+    Returns a timestring formatted as: ``YYYYMMDD-HHmm``, used for automatic folder generation
+
+    :returns: str
+    """
     from datetime import datetime
     return datetime.now().strftime("%Y%m%d-%H%M")
 
 
 class Timer(object):
+    """
+    Helper class for timing (tic-toc and global). The first time the class is called inside a
+    script, a tic timing is taken, to be used as absolute reference.
+
+    The timing of a portion of the code is obtained in a context, as follows::
+
+        >>> with Timer():
+        ...    do_something()
+        ...
+        Time context: 0:02:20.934
+        Time total: 0:02:20.934
+    """
     start = None
 
     def __init__(self):
