@@ -820,6 +820,66 @@ class ConvAutoEnc(object):
                 # self.add2summary(self.h, "h")
         return self
 
+    def defineDecoder(self):
+        r"""
+        Defines the decoder layer. At the end defines also `y` to reflect residual learning
+        or not.
+
+        :raises: RuntimeError
+        :returns: :class:`ConvAutoEnc` current instance
+        """
+        if (self.x is None) or (self.h_dec is None):
+            raise RuntimeError("To define a decoder you must define the encoder")
+        self.biases_decoder = []
+        with self.graph.as_default():
+            with tf.name_scope(self.prefix_name + "-decoder"):
+                x_current = self.h_dec
+                for current_layer in range(0, self.layers):
+                    layer       = self.layers - (current_layer + 1)
+                    name_deconv = self.prefix_name + "-decoder-deconvolution-%i" % layer
+                    name_sum    = self.prefix_name + "-decoder-sum-%i"           % layer
+                    name_out    = self.prefix_name + "-decoder-out-%i"           % layer
+                    name_B      = self.prefix_name + "-dec-bias-%d"              % layer
+
+                    W = self.weights[layer]
+                    B = tf.Variable(tf.zeros([W.get_shape().as_list()[2]]), name=name_B)
+                    self.add2summary(B, name_B)
+
+                    self.biases_decoder.append(B)
+
+                    shape = self.shapes[layer]
+                    h_layer = self.leakRelu(tf.add(
+                        tf.nn.conv2d_transpose(
+                            x_current, W, shape, strides=self.strides, padding=self.padding,
+                            name=name_deconv),
+                        B, name=name_sum
+                    ))
+                    x_current = self.leakRelu(h_layer, name=name_out)
+                if self.residual_learning:
+                    self.y = x_current + self.x
+                else:
+                    self.y = x_current
+                # TODO to make this work it is necessary to change the next line
+                self.add3summary(self.y, self.prefix_name + '-y')
+        return self
+
+    def defineCost(self):
+        r"""
+        Define the cost function that must be otpimized for this block, as minimization
+        of the sum on the square error between input and output.
+
+        :raises: RuntimeError
+        :returns: :class:`ConvAutoEnc` current instance
+        """
+        if (self.x is None) or (self.h_enc is None) or (self.y is None):
+            raise RuntimeError("You cannot define a cost, if you not define output")
+        with self.graph.as_default():
+            with tf.name_scope(self.prefix_name + '-cost-function'):
+                self.error = tf.reduce_sum(
+                    tf.square(self.y - self.x), name=self.prefix_name + '-error-definition')
+                self.add1summary(self.error, self.prefix_name + '-error')
+        return self
+
     def add1summary(self, var, name):
         r"""
         Add scalar elements to the summary, using name defined
@@ -891,66 +951,6 @@ class ConvAutoEnc(object):
         for layer in range(0, var.get_shape()[3]):
             name_l = "%s-L%d" % (name, layer)
             tf.image_summary(name_l, var[:, :, :, layer:layer + 1], max_images=batch)
-
-    def defineDecoder(self):
-        r"""
-        Defines the decoder layer. At the end defines also `y` to reflect residual learning
-        or not.
-
-        :raises: RuntimeError
-        :returns: :class:`ConvAutoEnc` current instance
-        """
-        if (self.x is None) or (self.h_dec is None):
-            raise RuntimeError("To define a decoder you must define the encoder")
-        self.biases_decoder = []
-        with self.graph.as_default():
-            with tf.name_scope(self.prefix_name + "-decoder"):
-                x_current = self.h_dec
-                for current_layer in range(0, self.layers):
-                    layer       = self.layers - (current_layer + 1)
-                    name_deconv = self.prefix_name + "-decoder-deconvolution-%i" % layer
-                    name_sum    = self.prefix_name + "-decoder-sum-%i"           % layer
-                    name_out    = self.prefix_name + "-decoder-out-%i"           % layer
-                    name_B      = self.prefix_name + "-dec-bias-%d"              % layer
-
-                    W = self.weights[layer]
-                    B = tf.Variable(tf.zeros([W.get_shape().as_list()[2]]), name=name_B)
-                    self.add2summary(B, name_B)
-
-                    self.biases_decoder.append(B)
-
-                    shape = self.shapes[layer]
-                    h_layer = self.leakRelu(tf.add(
-                        tf.nn.conv2d_transpose(
-                            x_current, W, shape, strides=self.strides, padding=self.padding,
-                            name=name_deconv),
-                        B, name=name_sum
-                    ))
-                    x_current = self.leakRelu(h_layer, name=name_out)
-                if self.residual_learning:
-                    self.y = x_current + self.x
-                else:
-                    self.y = x_current
-                # TODO to make this work it is necessary to change the next line
-                self.add3summary(self.y, self.prefix_name + '-y')
-        return self
-
-    def defineCost(self):
-        r"""
-        Define the cost function that must be otpimized for this block, as minimization
-        of the sum on the square error between input and output.
-
-        :raises: RuntimeError
-        :returns: :class:`ConvAutoEnc` current instance
-        """
-        if (self.x is None) or (self.h_enc is None) or (self.y is None):
-            raise RuntimeError("You cannot define a cost, if you not define output")
-        with self.graph.as_default():
-            with tf.name_scope(self.prefix_name + '-cost-function'):
-                self.error = tf.reduce_sum(
-                    tf.square(self.y - self.x), name=self.prefix_name + '-error-definition')
-                self.add1summary(self.error, self.prefix_name + '-error')
-        return self
 
 
 class CombinedAutoencoder:
