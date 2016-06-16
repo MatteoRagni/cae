@@ -106,11 +106,11 @@ class ConvAutoEncSettings(object):
         r"""
         **Property getter:**
 
-        This property defines the shape of the input layer tensor in the form of:
+        This property defines the shape of the input layer tensor in the form of ("NHWC"):
 
          1. examples batch size
-         2. images width
-         3. image height
+         2. images height
+         3. image width
          4. image depth (usually 1 for monochrome images, 3 for RGB images and 4 for images with alpha)
 
         As for now image width and image height must be equal, since the convolutional autoencoder is
@@ -640,7 +640,7 @@ class ConvAutoEnc(object):
      * :py:attr:`~biases_decoder`: a list of biases for the decoder
     """
 
-    def __init__(self, settings):
+    def __init__(self, settings, build_now=True):
         r"""
         Initializes the block, using the helper class :class:`ConvAutoEncSettings`, that contains all
         about the current block configuration. The use of **GPU** is defined on the basis of the
@@ -651,11 +651,14 @@ class ConvAutoEnc(object):
 
         :param settings: settings for the current block
         :type settings: :class:`ConvAutoEncSettings`
+        :param build_now: call immediately :func:`defineInput`, :func:`defineEncoder`, :func:`defineDecoder` and :func:`defineCost`
+        :type build_now: bool
         :returns: :class:`CanvAutoEnc` new instance
         :raises: AssertionError
         """
         assert type(
             settings) is ConvAutoEncSettings, "Settings are not of type ConvAutoSettings"
+        assert type(build_now) is bool, "build_now must be a bool"
         self.settings = settings
         self.settings.checkComplete()
 
@@ -674,10 +677,11 @@ class ConvAutoEnc(object):
 
         self.FLAGS = tf.app.flags.FLAGS
 
-        self.defineInput()
-        self.defineEncoder()
-        self.defineDecoder()
-        self.defineCost()
+        if build_now:
+            self.defineInput()
+            self.defineEncoder()
+            self.defineDecoder()
+            self.defineCost()
 
     def __getattribute__(self, key):
         r"""
@@ -706,23 +710,26 @@ class ConvAutoEnc(object):
         assert type(x) is tf.Tensor or type(x) is tf.Variable, "x  must be a tf.Tensor"
         assert type(name) is str, "name must be a str"
         with self.graph.as_default():
-            with tf.name_scope(name):
-                return tf.mul(x, tf.cast(tf.random_unifor(shape=tf.shape(x),
-                                                          minval=self.corruption_min,
-                                                          maxval=self.corruption_max,
-                                                          dtype=tf.int32)))
+            return tf.mul(x, tf.cast(tf.random_unifor(shape=tf.shape(x),
+                                                      minval=self.corruption_min,
+                                                      maxval=self.corruption_max,
+                                                      dtype=tf.int32)), name=self.prefix_name + "-" + name)
 
-    def setGraph(self, graph):
+    @property
+    def graph(self):
+        return self._graph
+
+    @graph.setter
+    def graph(self, graph):
         r"""
         Change the current `tf.Graph` (dafault: requested on object instantiation) with another one
 
         :param graph: the new graph
         :type graph: tf.Graph
-        :returns: :class:`ConvAutoEnc` current instance
         :raises: AssertionError
         """
         assert type(graph) is tf.Graph
-        self.graph = graph
+        self._graph = graph
         return self
 
     def leakRelu(self, x, alpha=0.2, name="leak-relu"):
@@ -749,28 +756,39 @@ class ConvAutoEnc(object):
             with tf.name_scope(name):
                 return 0.5 * ((1 + alpha_t) * x + (1 - alpha_t) * abs(x))
 
-    def defineInput(self):
+    def defineInput(self, input=None):
         r"""
-        Creates the input placeholder and corruption operations if required. Input is added
-        to the summary
+        If :py:attr:`input` is :py:attr:`None` creates a input placeholder and a corruption
+        operations if required. Input is added to the summary. This is useful for the very first
+        block of the autoencoder
 
+        If :py:attr:`input` is a :py:attr:`tensorflow.Tensor` (direct or an op)
+
+        :param input: the input shape tensor
+        :type input: tensorflow.Tensor, tensorflow.Variable
         :returns: :class:`ConvAutoEnc` current instance
+        :raises: AssertionError
         """
-        with self.graph.as_default():
-            with tf.name_scope(self.prefix_name + "-input-layer"):
-                x = tf.placeholder(tf.float32, self.input_shape, name=self.prefix_name + '-x')
-                if self.corruption:
-                    self.x = self._corrupt(x)
-                else:
-                    self.x = x
-                # TODO to make this work it is necessary to change the next line
-                self.add3summary(self.x, self.prefix_name + '-x')
+        if input is None:
+            with self.graph.as_default():
+                with tf.name_scope(self.prefix_name + "-input-layer"):
+                    x = tf.placeholder(tf.float32, self.input_shape, name=self.prefix_name + '-x')
+                    if self.corruption:
+                        self.x = self._corrupt(x)
+                    else:
+                        self.x = x
+                    self.addXsummary(self.x, self.prefix_name + '-x')
+        else:
+            assert type(input) is tf.Tensor or type(input) is tf.Variable, "input must be a tensorflow.Tensor"
+            self.input_shape = input.get_shape().as_list()
+            self.x = input
         return self
 
-    def defineEncoder(self):
+    def defineEncoder(self, connect=True):
         r"""
         Construct the encoder graph. Also assign `h_dec` as `h_enc`
 
+        :param connect: connect directly :py:attr:`h_enc` at :py:attr:`h_dec`
         :returns: :class:`ConvAutoEnc` current instance
         :raises: RuntimeError
         """
@@ -800,7 +818,8 @@ class ConvAutoEnc(object):
 
                     W = tf.Variable(tf.truncated_normal(
                         patch, stddev=0.1), name=name_W)
-                    self.add2summary(W, name_W)
+                    self.addRsummary(W, name_W)
+                    # self.add2summary(W, name_W)
                     B = tf.Variable(tf.zeros([new_depth]), name=name_B)
                     self.add2summary(B, name_B)
 
@@ -815,7 +834,8 @@ class ConvAutoEnc(object):
                     )
                     x_current = self.leakRelu(h_layer, name=name_out)
                 self.h_enc = x_current
-                self.h_dec = self.h_enc
+                if connect:
+                    self.h_dec = self.h_enc
                 self.addXsummary(self.h_enc, self.prefix_name + '-h_enc')
                 # self.add2summary(self.h, "h")
         return self
@@ -859,8 +879,7 @@ class ConvAutoEnc(object):
                     self.y = x_current + self.x
                 else:
                     self.y = x_current
-                # TODO to make this work it is necessary to change the next line
-                self.add3summary(self.y, self.prefix_name + '-y')
+                self.addXsummary(self.y, self.prefix_name + '-y')
         return self
 
     def defineCost(self):
@@ -878,6 +897,40 @@ class ConvAutoEnc(object):
                 self.error = tf.reduce_sum(
                     tf.square(self.y - self.x), name=self.prefix_name + '-error-definition')
                 self.add1summary(self.error, self.prefix_name + '-error')
+        return self
+
+    def defineOptimizer(self, session=None, opt="ADAM"):
+        r"""
+        Define the optimizer relative to this particular block. The definitions contains a list of variable
+        that can be optimized by this particular block, that are:
+
+         * :py:attr:`weights`
+         * :py:attr:`biases_encoder`
+         * :py:attr:`biases_decoder`
+
+        Please notice that a session for this particular thread must be active. If not, the function
+        will raise a :class:`RuntimeError`. That means that it should be called in a :py:attr:`tensorflow.Session` context
+        or after a :py:attr:`tensorflow.InteractiveSession` call. The session will be retrieved with
+        :py:attr:`tensorflow.get_default_session()`. If :py:attr:`session` is not ``None``,
+
+        As for now, only one optimizer is defined (**ADAM algorithm**), but we will se in the future
+        if add some more.
+
+        :param opt: type of optimizer to define: for now only ``"ADAM"`` available
+        :type opt: str
+        :returns: :class:`ConvAutoEnc` current instance
+        :raises: AssertionError, RuntimeError
+        """
+        assert type(opt) is str, "opt must be a str"
+        s = tf.get_default_session()
+        if s is None:
+            raise RuntimeError("Session must be declared before declaring optimizer")
+        with tf.name_scope(self.prefix_name + "-" + "optimizer"):
+            self.optimizer = tf.train.AdamOptimizer(
+                self.FLAGS.learning_rate,
+                name=self.prefix_name + "-optimizer").minimize(
+                    self.error,
+                    var_list=(self.weights + self.biases_encoder + self.biases_decoder))
         return self
 
     def add1summary(self, var, name):
@@ -948,19 +1001,151 @@ class ConvAutoEnc(object):
         assert type(name) is str, "Name must be a string"
         assert type(batch) is int, "batch size must be a integer"
         assert batch > 0, "batch size must be positive"
-        for layer in range(0, var.get_shape()[3]):
-            name_l = "%s-L%d" % (name, layer)
-            tf.image_summary(name_l, var[:, :, :, layer:layer + 1], max_images=batch)
+        with tf.name_scope("summaries"):
+            for layer in range(0, var.get_shape()[3]):
+                name_l = "%s-L%d" % (name, layer)
+                tf.image_summary(name_l, var[:, :, :, layer:layer + 1], max_images=batch)
+
+    def _reshapeTensor(self, t):
+        r"""
+        Given a tensor of dimensions:
+        $$
+        \\mathrm{height} \\times \\mathrm{width} \\times \\mathrm{input\\_size} \\times \\mathrm{output\\_size}
+        $$
+        tries to recreate a new
+        planar tensor that can be seen as an image by the summary function. That means it will be
+        reshaped two times:
+
+         * output will be concatenated on the width
+         * input will be concatenated on the height
+
+        (convention "NHWC"). The final tensor in output will have dimensions
+        $$
+        1 \\times \\mathrm{height} \\, \\mathrm{input\\_size} \\times \\mathrm{width} \\, \\mathrm{output\\_size} \\times 1
+        $$
+        This means also that tensor rank must be 4.
+
+        :param t: tensor to be reshaped
+        :type t: tensorflow.Tensor, tensorflow.Variable
+        :returns: tensorflow.Tensor
+        :raises: AssertionError, RuntimeError
+        """
+        assert type(t) is tf.Tensor or type(t) is tf.Variable, "t must be a tensorflow.Tensor"
+        shape = t.get_shape().as_list()
+        assert len(shape) is 4, "t rank must be 4, received %d" % len(shape)
+
+        rows = []
+        for r in range(0, shape[2]):
+            cols = []
+            for c in range(0, shape[3]):
+                cols.append(t[:, :, r:r + 1, c:c + 1])
+            rows.append(tf.concat(1, cols))
+        r = tf.squeeze(tf.concat(0, rows))
+        r_shape = r.get_shape().as_list()
+        return tf.reshape(r, [1, r_shape[0], r_shape[1], 1])
+
+    def addRsummary(self, var, name):
+        r"""
+        Uses :func:`_reshapeTensor` to add a tensor (like a weight) to the summary
+
+        :param var: the variable to add to the summary will be squeezed
+        :type var: tensorflow.Tensor, tensorflow.Variable
+        :param name: the name to be assigned in the summary
+        :type name: str
+        :raises: AssertionError
+        """
+        assert type(var) is tf.Variable or type(var) is tf.Tensor, "var must be a tensorflow.Tensor"
+        assert type(name) is str, "name must be a str"
+        with tf.name_scope("summaries"):
+            sum = self._reshapeTensor(var)
+            self.add3summary(sum, name)
 
 
-class CombinedAutoencoder:
+class ConvAutoEncStack:
+    r"""
+    The **creation of a stack** is different with respect to the learning of a single layer.
+    """
 
     def __init__(self, config_tuple):
+        r"""
+        Initialize a new series of connected block. The configuration of the single block
+        is specified with a :class:`ConvAutoEncSettings`. The block order (from the exterior to the interior)
+        is defined through a tuple of settings
+
+        :param config_tuple: the series of configurations
+        :type config_tuple: tuple
+        :returns: :class:`ConvAutoEncStack`
+        :raises: AssertionError
+        """
         assert type(config_tuple) is tuple, "Required a tuple of ConvAutoEncSettings"
         self.caes = []
         for c in config_tuple:
             assert type(c) is ConvAutoEncSettings, "Element in config tuple is not ConvAutoEncSettings"
-            self.caes.append(ConvAutoEnc(c))
+            self.caes.append(ConvAutoEnc(c, False))
+        self.initializeGraph()
+        self.initializeSession()
+        self.initializeBlocks()
 
     def len(self):
+        r"""
+        Returns the number of block inside the stack
+
+        :returns: int
+        """
         return len(self.caes)
+
+    def initializeGraph(self, g=None):
+        r"""
+        Define a new graph or assign a graph to all blocks
+
+        :param g: the graph or ``None`` to create a new one
+        :type g: tensorflow.Graph
+        :returns: :class:`ConvAutoEncStack` current instance
+        :raises: AssertionError
+        """
+        if g:
+            assert type(g) is tf.Graph, "g must be a tensorflow.Graph"
+            self.graph = g
+        self.graph = tf.Graph()
+        for cae in self.caes:
+            cae.graph = self.graph
+        return self
+
+    def initializeSession(self):
+        r"""
+        Initialize an interactive session that will be used inside the stack
+        """
+        # print("### REQUESTED SESSION CREATION ###")
+        self.session = tf.InteractiveSession(graph=self.graph)
+        return self.session
+
+    def close(self):
+        r"""
+        Closes the interactive session
+        """
+        self.session.close()
+        return self
+
+    def initializeBlocks(self):
+        inps = None
+        for cae in self.caes[0:self.len() - 1]:
+            cae.defineInput(inps)
+            cae.defineEncoder(False)
+            inps = cae.h_enc
+        outs = self.caes[self.len() - 1].defineInput(inps).defineEncoder().defineDecoder().defineCost().defineOptimizer().y
+        for cae in reversed(self.caes[0:self.len() - 1]):
+            cae.h_dec = outs
+            cae.defineDecoder()
+            cae.defineCost()
+            cae.defineOptimizer()
+            #outs = cae.y
+        self.session.run(tf.initialize_all_variables())
+        return self
+
+    def trainBlocks(self):
+        for n in range(0, self.len()):
+            cae = self.caes[n]
+            temp_h = cae.h_dec
+            cae.h_dec = cae.h_enc
+            yield(self.session, n, cae, self.caes[0].x)
+            cae.h_dec = temp_h

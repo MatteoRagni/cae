@@ -21,7 +21,7 @@ Convolutional Auto Encoder module
 Basic Block representation
 --------------------------
 .. autoclass:: autoencoder.ConvAutoEnc
-   :members: __init__, _corrupt, setGraph, leakRelu, defineInput, defineEncoder, defineDecoder, defineCost, add1summary, add2summary, add3summary, addXsummary
+   :members: __init__, _corrupt, setGraph, leakRelu, defineInput, defineEncoder, defineDecoder, defineCost, add1summary, add2summary, add3summary, addXsummary, _reshapeTensor, addRsummary
 
 Configuration class
 -------------------

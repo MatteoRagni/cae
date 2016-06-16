@@ -19,7 +19,7 @@ import json
 from argparse import ArgumentParser
 
 # PARSING COMMAND LINE ARGUMENTS
-cmd = ArgumentParser(prog="cae-bin",
+cmd = ArgumentParser(prog="caes-bin",
                      description="Stacked Convolutional Autoencoder",
                      epilog="Matteo Ragni, David Windridge - 2016")
 
@@ -76,7 +76,8 @@ elif cmd_args.verb < 0:
 def batch_loop(length):
     VERBOSITY = cmd_args.verb[0]
 
-DEVICE_PLACEMENT_LOG = True if VERBOSITY > 1 else False
+# DEVICE_PLACEMENT_LOG = True if VERBOSITY > 1 else False
+DEVICE_PLACEMENT_LOG = False
 
 # Telegram notifications
 if cmd_args.telegram:
@@ -131,16 +132,40 @@ tf.app.flags.DEFINE_float('learning_rate',
 
 # Define configurations for the Convolutional Autoencoder
 # To get a preview of the options that can be set, print(sets)
-sets = autoencoder.ConvAutoEncSettings()
-sets.prefix_name = "test"
-sets.input_shape = [FLAGS.batch_size, 193, 193, 1]
-sets.corruption = False
-sets.layers = 1
-sets.patch_size = 32
-sets.strides = [1, 2, 2, 1]
-sets.padding = 'SAME'
-sets.depth_increasing = 2
-sets.residual_learning = cmd_args.residuals
+sets1 = autoencoder.ConvAutoEncSettings()
+sets1.prefix_name = "alpha"
+sets1.input_shape = [FLAGS.batch_size, 193, 193, 1]
+sets1.corruption = False
+sets1.layers = 1
+sets1.patch_size = 3
+sets1.strides = [1, 1, 1, 1]
+sets1.padding = 'SAME'
+sets1.depth_increasing = 1
+sets1.residual_learning = cmd_args.residuals
+
+sets2 = autoencoder.ConvAutoEncSettings()
+sets2.prefix_name = "beta"
+sets2.input_shape = [FLAGS.batch_size, 193, 193, 2]
+sets2.corruption = False
+sets2.layers = 1
+sets2.patch_size = 3
+sets2.strides = [1, 1, 1, 1]
+sets2.padding = 'SAME'
+sets2.depth_increasing = 1
+sets2.residual_learning = cmd_args.residuals
+
+sets3 = autoencoder.ConvAutoEncSettings()
+sets3.prefix_name = "gamma"
+sets3.input_shape = [FLAGS.batch_size, 193, 193, 3]
+sets3.corruption = False
+sets3.layers = 1
+sets3.patch_size = 5
+sets3.strides = [1, 2, 2, 1]
+sets3.padding = 'SAME'
+sets3.depth_increasing = 1
+sets3.residual_learning = cmd_args.residuals
+
+sets = (sets1, sets2, sets3)
 
 def batch_loop(length):
     for i in range(0, length//FLAGS.batch_size):
@@ -152,7 +177,25 @@ def batch_loop(length):
 RESTORE = os.path.isfile(FLAGS.saver_dir)
 
 # Loading the Convolutional Autoencoder
-cae = autoencoder.ConvAutoEnc(sets)
+stack = autoencoder.ConvAutoEncStack(sets)
+
+merged = tf.merge_all_summaries()
+writer = tf.train.SummaryWriter(FLAGS.train_dir, stack.graph)
+
+print(stack.session)
+#stack.close()
+exit(0)
+
+
+
+####################################################################################################
+####################################################################################################
+####################################################################################################
+####################################################################################################
+####################################################################################################
+####################################################################################################
+
+
 
 # Loading training sets
 with open(FLAGS.dataset_file, "rb") as f:
