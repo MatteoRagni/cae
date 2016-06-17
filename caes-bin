@@ -31,7 +31,7 @@ DEFAULT_BATCH_SIZE    = 10
 DEFAULT_STEP_SIZE     = 10
 DEFAULT_LEARN_RATE    = 0.01
 VERBOSITY             = 1
-BATCH_LIMIT           = 7
+BATCH_LIMIT           = 4
 
 # TODO: Modify run and training dir to add a single
 # voice to define the path, and another to define the run.
@@ -43,7 +43,7 @@ cmd.add_argument('-gpu', dest='gpu', action='store_true',
 cmd.add_argument('-r', '--run', dest='runs', type=str, nargs=1, default=DEFAULT_RUNNING_DIR,
                  help='Define a specific run directory [%s]' % DEFAULT_RUNNING_DIR)
 cmd.add_argument('-s', '--save', dest='save', type=str, nargs=1, default=DEFAULT_SAVING_DIR,
-                 help='Define save positions for the result of the training, as checkpoint [%s]' % DEFAULT_SAVING_DIR)
+                 help='NOT IMPLEMENTED - Define save positions for the result of the training, as checkpoint [%s]' % DEFAULT_SAVING_DIR)
 cmd.add_argument('-bs', '--batchsize', dest='batchsize', type=int, nargs=1, default=DEFAULT_BATCH_SIZE,
                  help='Define the size of each batch. It must be compatible with RAM or VRAM capabilities. It must be positive [%d]' % DEFAULT_BATCH_SIZE)
 cmd.add_argument('-ss', '--stepsize', dest='stepsize', type=int, nargs=1, default=DEFAULT_STEP_SIZE,
@@ -136,7 +136,7 @@ sets1 = autoencoder.ConvAutoEncSettings()
 sets1.prefix_name = "alpha"
 sets1.input_shape = [FLAGS.batch_size, 193, 193, 1]
 sets1.corruption = False
-sets1.layers = 1
+sets1.layers = 3
 sets1.patch_size = 3
 sets1.strides = [1, 1, 1, 1]
 sets1.padding = 'SAME'
@@ -145,18 +145,18 @@ sets1.residual_learning = cmd_args.residuals
 
 sets2 = autoencoder.ConvAutoEncSettings()
 sets2.prefix_name = "beta"
-sets2.input_shape = [FLAGS.batch_size, 193, 193, 2]
+sets2.input_shape = [FLAGS.batch_size, 193, 193, 4]
 sets2.corruption = False
-sets2.layers = 1
+sets2.layers = 2
 sets2.patch_size = 3
-sets2.strides = [1, 1, 1, 1]
+sets2.strides = [1, 2, 2, 1]
 sets2.padding = 'SAME'
 sets2.depth_increasing = 1
 sets2.residual_learning = cmd_args.residuals
 
 sets3 = autoencoder.ConvAutoEncSettings()
 sets3.prefix_name = "gamma"
-sets3.input_shape = [FLAGS.batch_size, 193, 193, 3]
+sets3.input_shape = [FLAGS.batch_size, 49, 49, 6]
 sets3.corruption = False
 sets3.layers = 1
 sets3.patch_size = 5
@@ -181,8 +181,27 @@ stack = autoencoder.ConvAutoEncStack(sets)
 
 merged = tf.merge_all_summaries()
 writer = tf.train.SummaryWriter(FLAGS.train_dir, stack.graph)
+counter = 0
 
-print(stack.session)
+for session, n, cae, x in stack.trainBlocks():
+    with open(FLAGS.dataset_file, "rb") as f:
+        no_batch = pickle.load(f)
+        assert type(no_batch) is int, "First reading must be an int (number of batches)"
+        BATCH_LIMIT = no_batch if BATCH_LIMIT > no_batch else BATCH_LIMIT
+        result = [None, 99999999.9999999]
+        with tf.name_scope("TRAINING-%d" % n):
+            for b in range(0, BATCH_LIMIT):
+                log("RUNNING BATCH: %d (c: %i, e: %5.10f)" % (b, counter, result[1]))
+                dataset = pickle.load(f)
+                for init, ends in batch_loop(np.shape(dataset)[0]):
+                    with Timer(): # batch timing
+                        for step in range(0, FLAGS.max_steps):
+                            result = session.run([cae.optimizer], feed_dict={x: dataset[init:ends, :, :, :]})
+                            counter += 1
+                        result = session.run([merged, cae.error], feed_dict={x: dataset[init:ends, :, :, :]})
+                        log("Error at step %i is: %5.10f" % (counter, result[1]), 2)
+                        writer.add_summary(result[0], counter)
+
 #stack.close()
 exit(0)
 

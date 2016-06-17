@@ -33,6 +33,7 @@ from __future__ import print_function
 
 # import numpy as np
 import tensorflow as tf
+# import ipdb
 
 
 class ArgumentError(ValueError):
@@ -789,9 +790,11 @@ class ConvAutoEnc(object):
         Construct the encoder graph. Also assign `h_dec` as `h_enc`
 
         :param connect: connect directly :py:attr:`h_enc` at :py:attr:`h_dec`
+        :type connect: bool
         :returns: :class:`ConvAutoEnc` current instance
-        :raises: RuntimeError
+        :raises: AssertionError, RuntimeError
         """
+        assert type(connect) is bool, "connect must be a bool"
         if self.x is None:
             raise RuntimeError("You must define input to define the encoder")
         with self.graph.as_default():
@@ -1072,6 +1075,12 @@ class ConvAutoEncStack:
         is specified with a :class:`ConvAutoEncSettings`. The block order (from the exterior to the interior)
         is defined through a tuple of settings
 
+        Other operations are:
+
+         * initialization of a new graph for the model
+         * initialization of an interactive session
+         * definition of input, decoder, encoder, cost and particular optimizer for each block
+
         :param config_tuple: the series of configurations
         :type config_tuple: tuple
         :returns: :class:`ConvAutoEncStack`
@@ -1113,39 +1122,103 @@ class ConvAutoEncStack:
 
     def initializeSession(self):
         r"""
-        Initialize an interactive session that will be used inside the stack
+        Initialize an interactive session that will be used inside the stack. The session inherit the graph
+        contained in the property :py:attr:`graph`
+
+        :returns: tensorflow.InteractiveSession
         """
-        # print("### REQUESTED SESSION CREATION ###")
         self.session = tf.InteractiveSession(graph=self.graph)
         return self.session
 
     def close(self):
         r"""
         Closes the interactive session
+
+        :returns: :class:`ConvAutoEncStack` current instance
         """
         self.session.close()
         return self
 
     def initializeBlocks(self):
+        r"""
+        The idea of this function is to create the structure of our model. To understand is
+        better to use an example. Let's say that we have a model with 3 blocks.
+
+        .. image:: _static/stack.png
+             :align: center
+             :alt: Representation of the example
+
+        The idea of this function is to create first:
+        $$
+        g(x) = E_3(E_2(E_1(x)))
+        $$
+        and then build
+        $$
+        y = D_1(D_2(D_3(f(x)))) = g(h(x))
+        $$
+        it is not so easy to build this kind of model, and I'm not sure this is done correctly.
+        All the variables seem correct during debugging. We will see in training tests.
+
+        The training is another problem by itself, because I will need to detach temporarily section
+        of the graph, and for now I don't know if it is possible. Let's say we want to train the layer
+        number 2, we need to short circuit the model in suche a way that:
+        $$
+        h_2(x) = E_2(E_1(x))
+        $$
+        and
+        $$
+        y_2 = D_1(D_2(h_2(x)))
+        $$
+        and optimize between \\(x\\) and \\(y\\), withouth changing external variables (e.g.: the first block variables)...
+
+        :warning: I know that this function sometimes raises a :py:attr:`TypeError` that is ignored by someone, and I found no way why this should happen...
+
+        :returns: :class:`ConvAutoEncStack` current instance
+        """
         inps = None
         for cae in self.caes[0:self.len() - 1]:
             cae.defineInput(inps)
             cae.defineEncoder(False)
             inps = cae.h_enc
         outs = self.caes[self.len() - 1].defineInput(inps).defineEncoder().defineDecoder().defineCost().defineOptimizer().y
+        # TODO From this point on the function raises an exception TypeError. Why?
         for cae in reversed(self.caes[0:self.len() - 1]):
             cae.h_dec = outs
             cae.defineDecoder()
             cae.defineCost()
             cae.defineOptimizer()
-            #outs = cae.y
+            outs = cae.y
         self.session.run(tf.initialize_all_variables())
         return self
 
     def trainBlocks(self):
+        r"""
+        This function should actually perform the rendering exposing an already short circuited block
+        (look at :func:`initializeBlocks` for more information about).
+
+        There is a ``yield`` context that exposes:
+
+         * The current session
+         * the level of the currently trained block
+         * the currently trained block
+         * the very imput layer :py:attr:`x` of the external block
+
+        so it can be used as follows::
+
+            >>> for session, n, cae, x in stack.trainBlocks():
+            ...     print("Training block {}".format(n))
+            ...     session.run(cae.optimizer, feed_dict={x: dataset})
+            Training block 0
+            Training block 1
+            # and so on...
+
+        The training iterates through the model **reconnecting temporarily** the encoder output and
+        the decoder input.
+        """
         for n in range(0, self.len()):
             cae = self.caes[n]
             temp_h = cae.h_dec
             cae.h_dec = cae.h_enc
-            yield(self.session, n, cae, self.caes[0].x)
+            yield self.session, n, cae, self.caes[0].x
             cae.h_dec = temp_h
+        return self

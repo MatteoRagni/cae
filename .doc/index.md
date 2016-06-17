@@ -18,10 +18,15 @@ Convolutional Auto Encoder module
 ---------------------------------
 .. automodule:: autoencoder
 
+Stack Representation
+--------------------
+.. autoclass:: autoencoder.ConvAutoEncStack
+   :members:
+
 Basic Block representation
 --------------------------
 .. autoclass:: autoencoder.ConvAutoEnc
-   :members: __init__, _corrupt, setGraph, leakRelu, defineInput, defineEncoder, defineDecoder, defineCost, add1summary, add2summary, add3summary, addXsummary, _reshapeTensor, addRsummary
+   :members: __init__, _corrupt, graph, leakRelu, defineInput, defineEncoder, defineDecoder, defineCost, add1summary, add2summary, add3summary, addXsummary, _reshapeTensor, addRsummary, defineOptimizer
 
 Configuration class
 -------------------
