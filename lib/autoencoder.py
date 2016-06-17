@@ -1063,7 +1063,10 @@ class ConvAutoEnc(object):
             sum = self._reshapeTensor(var)
             self.add3summary(sum, name)
 
-
+#     _       _                       _           ___ _           _
+#    /_\ _  _| |_ ___ _ _  __ ___  __| |___ _ _  / __| |_ __ _ __| |__
+#   / _ \ || |  _/ -_) ' \/ _/ _ \/ _` / -_) '_| \__ \  _/ _` / _| / /
+#  /_/ \_\_,_|\__\___|_||_\__\___/\__,_\___|_|   |___/\__\__,_\__|_\_\
 class ConvAutoEncStack:
     r"""
     The **creation of a stack** is different with respect to the learning of a single layer.
