@@ -35,6 +35,12 @@ Configuration class
 
 Utilities
 ---------
+.. autoclass:: data_handler.DataHandler
+   :members: __init__, loop, _buildElement
+
+.. autoclass:: data_handler.DataPreparator
+   :members: __init__, loadFileNames, saveBatches, saveSupport, emptyBatch, loadFile
+
 .. autoclass:: autoencoder.ArgumentError
 
 .. autoclass:: tg_notifier.TelegramNotifier
