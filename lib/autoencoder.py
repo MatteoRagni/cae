@@ -1084,6 +1084,14 @@ class ConvAutoEnc(object):
 class ConvAutoEncStack:
     r"""
     The **creation of a stack** is different with respect to the learning of a single layer.
+
+    Some attribute of the class:
+
+     * :py:attr:`~caes` is a list of convolutional autoencoder blocks, from the outermost to the innermost
+     * :py:attr:`~error` is the error of the outermost layer
+     * :py:attr:`~graph` is the graph on which the model is defined
+     * :py:attr:`~session` is the session on which the optimizers are defined
+     * :py:attr:`~FLAGS` is a copy of :py:attr:`tensorflow.flags.FLAGS`
     """
 
     def __init__(self, config_tuple):
@@ -1232,6 +1240,9 @@ class ConvAutoEncStack:
         for cae in self.caes:
             cae.defineOptimizer(target=target)
         self.session.run(tf.initialize_all_variables())
+
+        self.error = self.caes[self.len() - 1].error
+        self.singleOptimizer()
         return self
 
     def trainBlocks(self):
@@ -1264,4 +1275,31 @@ class ConvAutoEncStack:
             cae.h_dec = cae.h_enc
             yield self.session, n, cae, self.caes[0].x
             cae.h_dec = temp_h
+        return self
+
+    def writeConfiguration(self, f):
+        """
+        Writes the caes configuration in an ascii file.
+
+        :param f: filename to write into
+        :type f: str
+        :returns: :class:`ConvAutoEncStack` current instance
+        """
+        assert type(f) is str, "filename must be a str"
+        with open(f, "w") as fp:
+            for cae in self.caes:
+                fp .write(str(cae.settings))
+                fp.write("\n")
+        return self
+
+    def singleOptimizer(self):
+        """
+        Whole elements optimizer. Optimize everything in only one round, using the external error
+
+        :returns: :class:`ConvAutoEncStack` current instance
+        """
+        with tf.name_scope("common-optimizer"):
+            self.optimizer = tf.train.AdamOptimizer(
+                self.FLAGS.learning_rate,
+                name="common-optimizer").minimize(self.error)
         return self
