@@ -30,9 +30,9 @@ DEFAULT_RUNNING_DIR   = os.path.join(DEFAULT_TRAINING_DIR, CURRENT_TRAINING_TIME
 DEFAULT_SAVING_DIR    = os.path.join(DEFAULT_TRAINING_DIR, 'save-' + CURRENT_TRAINING_TIME + '-cae.ckpt')
 DEFAULT_BATCH_SIZE    = 10
 DEFAULT_STEP_SIZE     = 10
-DEFAULT_LEARN_RATE    = 0.01
+DEFAULT_LEARN_RATE    = 0.001
 VERBOSITY             = 1
-BATCH_LIMIT           = 4
+BATCH_LIMIT           = 10
 
 # TODO: Modify run and training dir to add a single
 # voice to define the path, and another to define the run.
@@ -45,6 +45,8 @@ cmd.add_argument('-gpu', dest='gpu', action='store_true',
                  help='Enable CUDA and CuDNN [NO]')
 cmd.add_argument('--cumulate-error', dest='cumulate_error', action='store_true',
                  help='When training different blocks accumulate errors of all blocks for training [NO]')
+cmd.add_argument('-O', '--single-optimizer', dest='single_opt', action='store_true',
+                 help='Runs the optimization using a single optimizer for the all structure [NO]')
 cmd.add_argument('-r', '--run', dest='runs', type=str, nargs=1, default=DEFAULT_RUNNING_DIR,
                  help='Define a specific run directory [%s]' % DEFAULT_RUNNING_DIR)
 cmd.add_argument('-s', '--save', dest='save', type=str, nargs=1, default=DEFAULT_SAVING_DIR,
@@ -170,7 +172,6 @@ sets2.padding = 'SAME'
 sets2.depth_increasing = 4
 sets2.residual_learning = cmd_args.residuals
 
-
 sets3 = autoencoder.ConvAutoEncSettings()
 sets3.prefix_name = "gamma"
 sets3.input_shape = [FLAGS.batch_size, 41, 41, 9]
@@ -181,7 +182,6 @@ sets3.strides = [1, 2, 2, 1]
 sets3.padding = 'SAME'
 sets3.depth_increasing = 4
 sets3.residual_learning = cmd_args.residuals
-
 
 sets4 = autoencoder.ConvAutoEncSettings()
 sets4.prefix_name = "delta"
@@ -194,7 +194,6 @@ sets4.padding = 'SAME'
 sets4.depth_increasing = 4
 sets4.residual_learning = cmd_args.residuals
 
-
 sets5 = autoencoder.ConvAutoEncSettings()
 sets5.prefix_name = "epsilon"
 sets5.input_shape = [FLAGS.batch_size, 11, 11, 17]
@@ -205,7 +204,6 @@ sets5.strides = [1, 2, 2, 1]
 sets5.padding = 'SAME'
 sets5.depth_increasing = 4
 sets5.residual_learning = cmd_args.residuals
-
 
 sets6 = autoencoder.ConvAutoEncSettings()
 sets6.prefix_name = "zeta"
@@ -253,38 +251,73 @@ dh = DataHandler(FLAGS.dataset_file, FLAGS.support_file)
 losses_string = ""
 stack.writeConfiguration(os.path.join(FLAGS.train_dir, "config.txt"))
 
-for session, n, cae, x in stack.trainBlocks():
+if cmd_args.single_opt:
     result = [None, 99999999.9999999]
+    session = stack.session
 
-    with tf.name_scope("TRAINING-%d" % n):
+    with tf.name_scope("TRAINING"):
 
         current_batch = -1
         for batch_no, dataset in dh.loop(FLAGS.batch_size, BATCH_LIMIT):
 
             if current_batch != batch_no:
                 current_batch = batch_no
-                log("RUNNING BATCH: %d (c: %i, e: %5.10f) on layer %d" % (current_batch, counter, result[1], n))
+                log("RUNNING BATCH: %d (c: %i, e: %5.10f) on single layer" % (current_batch, counter, result[1]))
 
             with Timer():  # batch timing
 
                 for step in range(0, FLAGS.max_steps):
-                    result = session.run([cae.optimizer], feed_dict={x: dataset[0]})
+                    result = session.run([stack.optimizer], feed_dict={stack.caes[0].x: dataset[0]})
                     counter += 1
 
                 # Handling the losses at the end of an optimization run
                 losses = 0
                 loss_string = "%d" % counter
                 for im in dataset:
-                    loss = session.run(stack.error, feed_dict={x: im})
+                    loss = session.run(stack.error, feed_dict={stack.caes[0].x: im})
                     loss_string += "\t%f" % loss
                     losses += loss
                 loss_string += "\t%f\n" % losses
                 log("Loss report => " + loss_string)
                 losses_string += loss_string
 
-                result = session.run([merged, cae.error], feed_dict={x: dataset[0]})
+                result = session.run([merged, stack.error], feed_dict={stack.caes[0].x: dataset[0]})
                 log("Error at step %i is: %5.10f" % (counter, result[1]), 2)
                 writer.add_summary(result[0], counter)
+
+else:
+    for session, n, cae, x in stack.trainBlocks():
+        result = [None, 99999999.9999999]
+
+        with tf.name_scope("TRAINING-%d" % n):
+
+            current_batch = -1
+            for batch_no, dataset in dh.loop(FLAGS.batch_size, BATCH_LIMIT):
+
+                if current_batch != batch_no:
+                    current_batch = batch_no
+                    log("RUNNING BATCH: %d (c: %i, e: %5.10f) on layer %d" % (current_batch, counter, result[1], n))
+
+                with Timer():  # batch timing
+
+                    for step in range(0, FLAGS.max_steps):
+                        result = session.run([cae.optimizer], feed_dict={x: dataset[0]})
+                        counter += 1
+
+                    # Handling the losses at the end of an optimization run
+                    losses = 0
+                    loss_string = "%d" % counter
+                    for im in dataset:
+                        loss = session.run(stack.error, feed_dict={x: im})
+                        loss_string += "\t%f" % loss
+                        losses += loss
+                    loss_string += "\t%f\n" % losses
+                    log("Loss report => " + loss_string)
+                    losses_string += loss_string
+
+                    result = session.run([merged, cae.error], feed_dict={x: dataset[0]})
+                    log("Error at step %i is: %5.10f" % (counter, result[1]), 2)
+                    writer.add_summary(result[0], counter)
 
 
 with open(os.path.join(FLAGS.train_dir, "loss_report.csv"), "w") as f:

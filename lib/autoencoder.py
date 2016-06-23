@@ -1239,10 +1239,11 @@ class ConvAutoEncStack:
         # Define the optimizator
         for cae in self.caes:
             cae.defineOptimizer(target=target)
-        self.session.run(tf.initialize_all_variables())
 
-        self.error = self.caes[self.len() - 1].error
+        self.error = self.caes[0].error
         self.singleOptimizer()
+
+        self.session.run(tf.initialize_all_variables())
         return self
 
     def trainBlocks(self):
