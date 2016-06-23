@@ -880,6 +880,7 @@ class ConvAutoEnc(object):
                     x_current = self.leakRelu(h_layer, name=name_out)
                 if self.residual_learning:
                     self.y = x_current + self.x
+                    self.addXsummary(x_current, self.prefix_name + '-y-residuals')
                 else:
                     self.y = x_current
                 self.addXsummary(self.y, self.prefix_name + '-y')
@@ -902,7 +903,7 @@ class ConvAutoEnc(object):
                 self.add1summary(self.error, self.prefix_name + '-error')
         return self
 
-    def defineOptimizer(self, session=None, opt="ADAM"):
+    def defineOptimizer(self, target=None, opt="ADAM"):
         r"""
         Define the optimizer relative to this particular block. The definitions contains a list of variable
         that can be optimized by this particular block, that are:
@@ -911,6 +912,8 @@ class ConvAutoEnc(object):
          * :py:attr:`biases_encoder`
          * :py:attr:`biases_decoder`
 
+        If a target is speicified, it will be the optimizing functional. If it is ``None``, the functional will be the current
+        block :py:attr:`~error`
         Please notice that a session for this particular thread must be active. If not, the function
         will raise a :class:`RuntimeError`. That means that it should be called in a :py:attr:`tensorflow.Session` context
         or after a :py:attr:`tensorflow.InteractiveSession` call. The session will be retrieved with
@@ -919,20 +922,30 @@ class ConvAutoEnc(object):
         As for now, only one optimizer is defined (**ADAM algorithm**), but we will se in the future
         if add some more.
 
+        :warning: as for now, it inherits the dafault session only.
+
+        :param target: the target for the optimization if different from layer cost
+        :type target: tensorflow.Tensor, None
         :param opt: type of optimizer to define: for now only ``"ADAM"`` available
         :type opt: str
         :returns: :class:`ConvAutoEnc` current instance
         :raises: AssertionError, RuntimeError
         """
         assert type(opt) is str, "opt must be a str"
+        if target is not None:
+            assert type(target) is tf.Tensor, "target must be a tensor"
+        else:
+            target = self.error
+
         s = tf.get_default_session()
         if s is None:
             raise RuntimeError("Session must be declared before declaring optimizer")
+
         with tf.name_scope(self.prefix_name + "-" + "optimizer"):
             self.optimizer = tf.train.AdamOptimizer(
                 self.FLAGS.learning_rate,
                 name=self.prefix_name + "-optimizer").minimize(
-                    self.error,
+                    target,
                     var_list=(self.weights + self.biases_encoder + self.biases_decoder))
         return self
 
@@ -1063,6 +1076,7 @@ class ConvAutoEnc(object):
             sum = self._reshapeTensor(var)
             self.add3summary(sum, name)
 
+
 #     _       _                       _           ___ _           _
 #    /_\ _  _| |_ ___ _ _  __ ___  __| |___ _ _  / __| |_ __ _ __| |__
 #   / _ \ || |  _/ -_) ' \/ _/ _ \/ _` / -_) '_| \__ \  _/ _` / _| / /
@@ -1091,9 +1105,13 @@ class ConvAutoEncStack:
         """
         assert type(config_tuple) is tuple, "Required a tuple of ConvAutoEncSettings"
         self.caes = []
+
+        self.FLAGS = tf.app.flags.FLAGS
+
         for c in config_tuple:
             assert type(c) is ConvAutoEncSettings, "Element in config tuple is not ConvAutoEncSettings"
             self.caes.append(ConvAutoEnc(c, False))
+
         self.initializeGraph()
         self.initializeSession()
         self.initializeBlocks()
@@ -1174,23 +1192,45 @@ class ConvAutoEncStack:
         $$
         and optimize between \\(x\\) and \\(y\\), withouth changing external variables (e.g.: the first block variables)...
 
+        A new added feature is the cumulative error. if ``tensorflow.flags.FLAGS.cumulative_error`` is set to ``True``, than
+        the error that will be considered by each block is the cumulative error of the whole structure
+
+        $$
+        \\mathrm{min} \\left( \\sum_{c \\, \\in \\, \\mathrm{CAEs}} (y_c - x_c)^2 \\right)
+        $$
+
         :warning: I know that this function sometimes raises a :py:attr:`TypeError` that is ignored by someone, and I found no way why this should happen...
 
         :returns: :class:`ConvAutoEncStack` current instance
         """
+        # Defines encoding layer
         inps = None
         for cae in self.caes[0:self.len() - 1]:
             cae.defineInput(inps)
             cae.defineEncoder(False)
             inps = cae.h_enc
-        outs = self.caes[self.len() - 1].defineInput(inps).defineEncoder().defineDecoder().defineCost().defineOptimizer().y
+        outs = self.caes[self.len() - 1].defineInput(inps).defineEncoder().defineDecoder().defineCost().y
+
+        # Defines decoding layer
         # TODO From this point on the function raises an exception TypeError. Why?
         for cae in reversed(self.caes[0:self.len() - 1]):
             cae.h_dec = outs
             cae.defineDecoder()
             cae.defineCost()
-            cae.defineOptimizer()
             outs = cae.y
+
+        # Defines the optimization target
+        target = None
+        if self.FLAGS.cumulate_error:
+            target = self.caes[0].error
+            for cae in self.caes[1:self.len()]:
+                target += cae.error
+            with tf.name_scope("summaries"):
+                tf.scalar_summary("cumulative-cost", target)
+
+        # Define the optimizator
+        for cae in self.caes:
+            cae.defineOptimizer(target=target)
         self.session.run(tf.initialize_all_variables())
         return self
 

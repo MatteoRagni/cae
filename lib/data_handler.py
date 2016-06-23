@@ -187,7 +187,8 @@ class DataHandler:
 
     Actually nothing more than the initializer is needed to use this particular class::
 
-         >>> for data in DataHandler(data_file, support_file, batch):
+         >>> dh = DataHandler(data_file, support_file)
+         >>> for batch_no, data in dh.loop(10, 5)
          ...     do_something(data)
 
     :warning: as for now this procedure is locked with only three elements due to short time.
@@ -214,7 +215,9 @@ class DataHandler:
 
     def loop(self, b_msz=10, limit_batch=-1):
         r"""
-        Executes the loop
+        Executes the loop.
+
+        :warning: loop will re-open the data file from scratch!
 
         :param b_msz: this is the fine tuning dimension of the batch
         :param limit_batch: how many batches to run? if negative goes till the end
@@ -233,7 +236,7 @@ class DataHandler:
                 for i in range(0, np.shape(current["data"])[0] // b_msz):
                     init = i * b_msz
                     ends = init + b_msz
-                    yield self._buildElement(
+                    yield batch_no, self._buildElement(
                         current["data"][init:ends, :, :, :],
                         current["ids"][init:ends]
                     )

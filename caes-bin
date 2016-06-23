@@ -17,6 +17,7 @@ from timer import Timer
 from timer import timestring
 import json
 from argparse import ArgumentParser
+from data_handler import DataHandler
 
 # PARSING COMMAND LINE ARGUMENTS
 cmd = ArgumentParser(prog="caes-bin",
@@ -38,8 +39,12 @@ BATCH_LIMIT           = 4
 
 cmd.add_argument('-in', dest='dataset', type=str, nargs=1, required=True,
                  help='Input dataset for the training')
+cmd.add_argument('-sp', dest='support', type=str, nargs=1, required=True,
+                 help='Input dataset as support file')
 cmd.add_argument('-gpu', dest='gpu', action='store_true',
                  help='Enable CUDA and CuDNN [NO]')
+cmd.add_argument('--cumulate-error', dest='cumulate_error', action='store_true',
+                 help='When training different blocks accumulate errors of all blocks for training [NO]')
 cmd.add_argument('-r', '--run', dest='runs', type=str, nargs=1, default=DEFAULT_RUNNING_DIR,
                  help='Define a specific run directory [%s]' % DEFAULT_RUNNING_DIR)
 cmd.add_argument('-s', '--save', dest='save', type=str, nargs=1, default=DEFAULT_SAVING_DIR,
@@ -61,6 +66,7 @@ cmd_args = cmd.parse_args()
 # Handles the command line arguments and check everything is ok
 try:
     assert os.path.isfile(' '.join(cmd_args.dataset)), "Dataset file [%s] does not exist" % ' '.join(cmd_args.dataset)
+    assert os.path.isfile(' '.join(cmd_args.support)), "Support file [%s] does not exist" % ' '.join(cmd_args.support)
     assert cmd_args.stepsize  > 0,                     "Step size must be a positive integer"
     assert cmd_args.batchsize > 0,                     "Batch size must be a positive integer"
     assert cmd_args.learnrate  > 0.0,                   "Batch size must be a positive float"
@@ -108,6 +114,9 @@ FLAGS = tf.app.flags.FLAGS
 tf.app.flags.DEFINE_string('dataset_file',
                            cmd_args.dataset[0],
                            "Dataset file for training")
+tf.app.flags.DEFINE_string('support_file',
+                           cmd_args.support[0],
+                           "Dataset file for support the training")
 tf.app.flags.DEFINE_string('train_dir',
                            cmd_args.runs,
                            "Training directory")
@@ -126,15 +135,22 @@ tf.app.flags.DEFINE_boolean('log_device_placement',
 tf.app.flags.DEFINE_boolean('gpu_enabled',
                             cmd_args.gpu,
                             "Enables the use of GPU for Convolutions")
+tf.app.flags.DEFINE_boolean('cumulate_error',
+                            cmd_args.cumulate_error,
+                            "Enables the use of cumulative errors")
 tf.app.flags.DEFINE_float('learning_rate',
                           cmd_args.learnrate,
                           "Optimizer learning rate")
 
-# Define configurations for the Convolutional Autoencoder
-# To get a preview of the options that can be set, print(sets)
+#   ___           __ _                    _   _
+#  / __|___ _ _  / _(_)__ _ _  _ _ _ __ _| |_(_)___ _ _
+# | (__/ _ \ ' \|  _| / _` | || | '_/ _` |  _| / _ \ ' \
+#  \___\___/_||_|_| |_\__, |\_,_|_| \__,_|\__|_\___/_||_|
+#                     |___/
+
 sets1 = autoencoder.ConvAutoEncSettings()
 sets1.prefix_name = "alpha"
-sets1.input_shape = [FLAGS.batch_size, 193, 193, 1]
+sets1.input_shape = [FLAGS.batch_size, 161, 161, 1]
 sets1.corruption = False
 sets1.layers = 2
 sets1.patch_size = 3
@@ -145,7 +161,7 @@ sets1.residual_learning = cmd_args.residuals
 
 sets2 = autoencoder.ConvAutoEncSettings()
 sets2.prefix_name = "beta"
-sets2.input_shape = [FLAGS.batch_size, 49, 49, 4]
+sets2.input_shape = [FLAGS.batch_size, 41, 41, 4]
 sets2.corruption = False
 sets2.layers = 1
 sets2.patch_size = 3
@@ -156,7 +172,7 @@ sets2.residual_learning = cmd_args.residuals
 
 sets3 = autoencoder.ConvAutoEncSettings()
 sets3.prefix_name = "gamma"
-sets3.input_shape = [FLAGS.batch_size, 25, 25, 6]
+sets3.input_shape = [FLAGS.batch_size, 21, 21, 6]
 sets3.corruption = False
 sets3.layers = 1
 sets3.patch_size = 5
@@ -166,6 +182,11 @@ sets3.depth_increasing = 1
 sets3.residual_learning = cmd_args.residuals
 
 sets = (sets1, sets2, sets3)
+
+#              _
+#  ___ _ _  __| |
+# / -_) ' \/ _` |
+# \___|_||_\__,_|
 
 def batch_loop(length):
     for i in range(0, length//FLAGS.batch_size):
@@ -184,24 +205,31 @@ writer = tf.train.SummaryWriter(FLAGS.train_dir, stack.graph)
 counter = 0
 
 # try:
+dh = DataHandler(FLAGS.dataset_file, FLAGS.support_file)
 for session, n, cae, x in stack.trainBlocks():
-    with open(FLAGS.dataset_file, "rb") as f:
-        no_batch = pickle.load(f)
-        assert type(no_batch) is int, "First reading must be an int (number of batches)"
-        BATCH_LIMIT = no_batch if BATCH_LIMIT > no_batch else BATCH_LIMIT
-        result = [None, 99999999.9999999]
-        with tf.name_scope("TRAINING-%d" % n):
-            for b in range(0, BATCH_LIMIT):
-                log("RUNNING BATCH: %d (c: %i, e: %5.10f)" % (b, counter, result[1]))
-                dataset = pickle.load(f)
-                for init, ends in batch_loop(np.shape(dataset)[0]):
-                    with Timer(): # batch timing
-                        for step in range(0, FLAGS.max_steps):
-                            result = session.run([cae.optimizer], feed_dict={x: dataset[init:ends, :, :, :]})
-                            counter += 1
-                        result = session.run([merged, cae.error], feed_dict={x: dataset[init:ends, :, :, :]})
-                        log("Error at step %i is: %5.10f" % (counter, result[1]), 2)
-                        writer.add_summary(result[0], counter)
+    result = [None, 99999999.9999999]
+
+    with tf.name_scope("TRAINING-%d" % n):
+
+        current_batch = -1
+        for batch_no, dataset in dh.loop(FLAGS.batch_size, BATCH_LIMIT):
+
+            if current_batch != batch_no:
+                current_batch = batch_no
+                log("RUNNING BATCH: %d (c: %i, e: %5.10f) on layer %d" % (current_batch, counter, result[1], n))
+
+            with Timer():  # batch timing
+
+                for step in range(0, FLAGS.max_steps):
+                    result = session.run([cae.optimizer], feed_dict={x: dataset[0]})
+                    counter += 1
+
+                result = session.run([merged, cae.error], feed_dict={x: dataset[0]})
+                log("Error at step %i is: %5.10f" % (counter, result[1]), 2)
+                writer.add_summary(result[0], counter)
+
+
+
 # finally:
 #   stack.close()
 log("Learning Completed")
