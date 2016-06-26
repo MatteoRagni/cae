@@ -18,6 +18,7 @@ from timer import timestring
 import json
 from argparse import ArgumentParser
 from data_handler import DataHandler
+from autoenc_shell import ConvAutoEncShell
 
 # PARSING COMMAND LINE ARGUMENTS
 cmd = ArgumentParser(prog="caes-bin",
@@ -230,11 +231,17 @@ sets = (
 # / -_) ' \/ _` |
 # \___|_||_\__,_|
 
-def batch_loop(length):
-    for i in range(0, length//FLAGS.batch_size):
-        init = i * FLAGS.batch_size
-        ends = (i + 1) * FLAGS.batch_size
-        yield(init, ends)
+
+#  _____       _
+# |_   _|__ __| |_ ___
+#   | |/ -_|_-<  _(_-<
+#   |_|\___/__/\__/__/
+
+
+#              _
+#  ___ _ _  __| |
+# / -_) ' \/ _` |
+# \___|_||_\__,_|
 
 # Check if there is a checkpoint to restore
 RESTORE = os.path.isfile(FLAGS.saver_dir)
@@ -247,7 +254,7 @@ writer = tf.train.SummaryWriter(FLAGS.train_dir, stack.graph)
 counter = 0
 
 # try:
-dh = DataHandler(FLAGS.dataset_file, FLAGS.support_file)
+dh = DataHandler(FLAGS.dataset_file, FLAGS.support_file, tuple(sets1.input_shape))
 losses_string = ""
 stack.writeConfiguration(os.path.join(FLAGS.train_dir, "config.txt"))
 
@@ -323,6 +330,17 @@ else:
 with open(os.path.join(FLAGS.train_dir, "loss_report.csv"), "w") as f:
     f.write(losses_string)
 
+# from autoenc_shell import ConvAutoEncShell
+ConvAutoEncShell({
+    "objects": 3,
+    "positions": 25,
+    "session": session,
+    "stack": stack,
+    "counter": counter,
+    "writer": writer,
+    "dh": dh,
+    "summary": merged
+}).cmdloop()
 
 # finally:
 #   stack.close()

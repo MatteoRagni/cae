@@ -193,7 +193,7 @@ class DataHandler:
 
     :warning: as for now this procedure is locked with only three elements due to short time.
     """
-    def __init__(self, cf, sf):
+    def __init__(self, cf, sf, shape):
         r"""
         Initialize the data handler and all the files
 
@@ -212,6 +212,8 @@ class DataHandler:
         with open(sf, "rb") as f:
             self.support = pickle.load(f)
         self.cf = cf
+
+        self.shape = shape
 
     def loop(self, b_msz=10, limit_batch=-1):
         r"""
@@ -279,3 +281,14 @@ class DataHandler:
         ]
         for i, p in enumerate(perm):
             yield i, p
+
+    def test_image(self, l):
+        assert type(l) is tuple, "test_image is built on a tuple"
+        test = np.ndarray(shape=self.shape, dtype=np.float32)
+        try:
+            image = self.support[l]
+            for i in range(0, self.shape[0]):
+                test[i, :, :, :] = image
+            return test
+        except KeyError as e:
+            print("Cannot find element {}".format(e))
