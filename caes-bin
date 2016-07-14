@@ -33,7 +33,7 @@ DEFAULT_BATCH_SIZE    = 10
 DEFAULT_STEP_SIZE     = 10
 DEFAULT_LEARN_RATE    = 0.001
 VERBOSITY             = 1
-BATCH_LIMIT           = 10
+BATCH_LIMIT           = 4
 
 # TODO: Modify run and training dir to add a single
 # voice to define the path, and another to define the run.
@@ -74,7 +74,7 @@ try:
     assert cmd_args.batchsize > 0,                     "Batch size must be a positive integer"
     assert cmd_args.learnrate  > 0.0,                   "Batch size must be a positive float"
 except AssertionError as error:
-    print("Input Error10: " + str(error))
+    print("Input Error: " + str(error))
     exit(126)
 
 if cmd_args.verb > 3:

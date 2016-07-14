@@ -871,19 +871,58 @@ class ConvAutoEnc(object):
                     self.biases_decoder.append(B)
 
                     shape = self.shapes[layer]
-                    h_layer = self.leakRelu(tf.add(
+                    x_current = self.leakRelu(tf.add(
                         tf.nn.conv2d_transpose(
                             x_current, W, shape, strides=self.strides, padding=self.padding,
                             name=name_deconv),
                         B, name=name_sum
-                    ))
-                    x_current = self.leakRelu(h_layer, name=name_out)
+                    ), name=name_out)
+                    # x_current = self.leakRelu(h_layer, name=name_out)
                 if self.residual_learning:
                     self.y = x_current + self.x
                     self.addXsummary(x_current, self.prefix_name + '-y-residuals')
                 else:
                     self.y = x_current
                 self.addXsummary(self.y, self.prefix_name + '-y')
+        self.biases_decoder = self.biases_decoder[::-1]
+        return self
+
+    def defineHallucination(self, inception):
+        r"""
+        Defines the hallucination layer. This particular layer is used to test
+        the result of an inception from the middle layer
+
+        :param inception: the input, that can be a placeholder or something else
+        :type inception: tf.Tensor
+        :raises: AssertionError, RuntimeError
+        :returns: :class:`ConvAutoEnc` current instance
+        """
+        assert type(inception) is tf.Tensor, "Inception must be a tensorflow.Tensor"
+        if self.biases_decoder is None:
+            raise RuntimeError("To define an hallucination you must define the decoder")
+        with self.graph.as_default():
+            with tf.name_scope(self.prefix_name + "-hallucinate"):
+                x_current = inception
+                for current_layer in range(0, self.layers):
+                    layer       = self.layers - (current_layer + 1)
+                    name_deconv = self.prefix_name + "-hallucinate-deconvolution-%i" % layer
+                    name_sum    = self.prefix_name + "-hallucinate-sum-%i"           % layer
+                    name_out    = self.prefix_name + "-hallucinate-out-%i"           % layer
+
+                    W = self.weights[layer]
+                    B = self.biases_decoder[layer]
+
+                    shape = self.shapes[layer]
+                    # h_layer = self.leakRelu(tf.add(
+                    x_current = self.leakRelu(tf.add(
+                        tf.nn.conv2d_transpose(
+                            x_current, W, shape, strides=self.strides, padding=self.padding,
+                            name=name_deconv),
+                        B, name=name_sum
+                    ), name=name_out)
+                    # x_current = self.leakRelu(h_layer, name=name_out)
+                self.hallucinated = x_current
+                self.addXsummary(self.y, self.prefix_name + '-y-hallucinate')
         return self
 
     def defineCost(self):
@@ -1088,10 +1127,13 @@ class ConvAutoEncStack:
     Some attribute of the class:
 
      * :py:attr:`~caes` is a list of convolutional autoencoder blocks, from the outermost to the innermost
+     * :py:attr:`~inception` is a placeholder for the hallucination input
+     * :py:attr:`~h_enc` output of encoder
      * :py:attr:`~error` is the error of the outermost layer
      * :py:attr:`~graph` is the graph on which the model is defined
      * :py:attr:`~session` is the session on which the optimizers are defined
      * :py:attr:`~FLAGS` is a copy of :py:attr:`tensorflow.flags.FLAGS`
+
     """
 
     def __init__(self, config_tuple):
@@ -1217,15 +1259,23 @@ class ConvAutoEncStack:
             cae.defineInput(inps)
             cae.defineEncoder(False)
             inps = cae.h_enc
-        outs = self.caes[self.len() - 1].defineInput(inps).defineEncoder().defineDecoder().defineCost().y
+        self.h_enc = self.caes[self.len() - 1].defineInput(inps).defineEncoder().defineDecoder().defineCost().y
 
         # Defines decoding layer
         # TODO From this point on the function raises an exception TypeError. Why?
+        outs = self.h_enc
         for cae in reversed(self.caes[0:self.len() - 1]):
             cae.h_dec = outs
             cae.defineDecoder()
             cae.defineCost()
             outs = cae.y
+
+        # Define hallucination layer
+        self.inception = tf.placeholder(tf.float32, tuple(self.h_enc.get_shape().as_list()), name="hallucinate-input")
+        outs = self.inception
+        for cae in reversed(self.caes[0:self.len() - 1]):
+            cae.defineHallucination(outs)
+            outs = cae.hallucination
 
         # Defines the optimization target
         target = None
