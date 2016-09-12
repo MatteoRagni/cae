@@ -1275,7 +1275,7 @@ class ConvAutoEncStack:
         outs = self.inception
         for cae in reversed(self.caes[0:self.len() - 1]):
             cae.defineHallucination(outs)
-            outs = cae.hallucination
+            outs = cae.hallucinated
 
         # Defines the optimization target
         target = None

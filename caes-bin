@@ -33,7 +33,7 @@ DEFAULT_BATCH_SIZE    = 10
 DEFAULT_STEP_SIZE     = 10
 DEFAULT_LEARN_RATE    = 0.001
 VERBOSITY             = 1
-BATCH_LIMIT           = 4
+BATCH_LIMIT           = 8
 
 # TODO: Modify run and training dir to add a single
 # voice to define the path, and another to define the run.

@@ -58,6 +58,8 @@ AutoEncoder Stack post-learn shell
         self.writer = None
         self.hallucinate = {"on": 1.0, "off": 0.0}
         self.inner_shape = None
+        self.empty_x = np.full(
+            tuple(self.config["stack"].caes[0].x.get_shape().as_list()), 0, dtype=np.float32)
 
     # COMMAND IMPLEMENTATION
     def do_load_single(self, arg):
@@ -97,7 +99,7 @@ AutoEncoder Stack post-learn shell
                 raise Exception("file does not exist")
             with open(arg, "r") as f:
                 conf = json.load(f)
-
+                return conf # TODO: continuare
 
         except Exception as e:
             print("ERROR: {}".format(e))
@@ -162,14 +164,15 @@ AutoEncoder Stack post-learn shell
                 print("Writer not defined. Please create a new writer first")
                 return
 
-            p = self.config["stack"].len() - 1
-            h = self.config["stack"].caes[p].h_dec
+            # p = self.config["stack"].len() - 1
+            h = self.config["stack"].inception
+            x = self.config["stack"].caes[0].x
             if self.inner_shape is None:
                 self.inner_shape = tuple(h.get_shape().as_list())
             layers = self.parse(layers)
             for k in layers:
                 if not k < self.inner_shape[3]:
-                    print()
+                    print("k ({}) too big (> {})".format(k, self.inner_shape[3]))
             new_h = np.full(self.inner_shape, self.hallucinate["off"], dtype=np.float32)
             act_h = np.full((self.inner_shape[0], self.inner_shape[1], self.inner_shape[2], 1), self.hallucinate["on"], dtype=np.float32)
             for k in layers:
@@ -177,7 +180,7 @@ AutoEncoder Stack post-learn shell
 
             self.config["counter"] += 1
             print("Hallucinating...")
-            result = self.config["session"].run([self.config["summary"]], feed_dict={h: new_h})
+            result = self.config["session"].run([self.config["summary"]], feed_dict={h: new_h, x: self.empty_x})
             print("Wrinting on tensorboard...")
             self.writer.add_summary(result[0], self.config["counter"])
             self.writer.flush()
