@@ -173,6 +173,7 @@ AutoEncoder Stack post-learn shell
             for k in layers:
                 if not k < self.inner_shape[3]:
                     print("k ({}) too big (> {})".format(k, self.inner_shape[3]))
+
             new_h = np.full(self.inner_shape, self.hallucinate["off"], dtype=np.float32)
             act_h = np.full((self.inner_shape[0], self.inner_shape[1], self.inner_shape[2], 1), self.hallucinate["on"], dtype=np.float32)
             for k in layers:
