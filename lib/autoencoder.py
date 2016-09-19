@@ -1290,7 +1290,10 @@ class ConvAutoEncStack:
         for cae in self.caes:
             cae.defineOptimizer(target=target)
 
-        self.error = self.caes[0].error
+        # FIXME : Error function redefined
+        # self.error = self.caes[0].error
+        self.error = target
+
         self.singleOptimizer()
 
         self.session.run(tf.initialize_all_variables())
