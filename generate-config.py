@@ -11,8 +11,8 @@ import autoencoder
 #                     |___/
 # Do not edit above this line
 
-OUTPUT_FILE       = "autoencoder.pickle"
-BATCH_SIZE        = 10
+OUTPUT_FILE       = "dataset/autoencoder.pickle"
+BATCH_SIZE        = None
 RESIDUAL_LEARNING = False
 
 sets1 = autoencoder.ConvAutoEncSettings()

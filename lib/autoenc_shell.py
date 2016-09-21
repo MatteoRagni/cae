@@ -7,34 +7,7 @@ import numpy as np
 
 # Load configuration
 import os
-import json
-
-"""
-class NewConvAutoEncShell(cmd.Cmd):
-    r"" " <-- TODO
-    New version of the ConvAutoEnc shell. This shell is spawned
-    before the training and it is actually responsible for the
-    training itself. It can receive some command from command line
-    input in a form of `dict` with some key defined:
-
-     - json_file: contains the json with the architecture description
-     - datasets: an array that contains dataset and support file
-     - batchsize
-    "" " <-- TODO
-
-    from data_handler import DataHandler
-    from timer import Timer
-
-
-    def __init__(self, config=None):
-        if config is not None:
-            assert type(config) is dict, "config must be a dict"
-            try:
-
-            except KeyError:
-                pass
-"""
-
+from six.moves import cPickle as pickle
 
 class ConvAutoEncShell(cmd.Cmd):
     """
@@ -92,13 +65,13 @@ AutoEncoder Stack post-learn shell
     def do_configure(self, arg):
         r"""
         Load configuration to define a new Convolutional autoencoder.
-        Configuration is a json file
+        Configuration is a pickle file
         """
         try:
             if not os.path.isfile(arg):
                 raise Exception("file does not exist")
-            with open(arg, "r") as f:
-                conf = json.load(f)
+            with open(arg, "rb") as f:
+                conf = pickle.load(f)
                 return conf # TODO: continuare
 
         except Exception as e:

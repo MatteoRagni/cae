@@ -38,13 +38,15 @@ BATCH_LIMIT           = 8
 # TODO: Modify run and training dir to add a single
 # voice to define the path, and another to define the run.
 
+cmd.add_argument('-cae', '--cae-config', dest='cae_config', type=str, nargs=1, required=True,
+                 help='Configuration of the autoencoder structure')
 cmd.add_argument('-in', dest='dataset', type=str, nargs=1, required=True,
                  help='Input dataset for the training')
 cmd.add_argument('-sp', dest='support', type=str, nargs=1, required=True,
                  help='Input dataset as support file')
 cmd.add_argument('-gpu', dest='gpu', action='store_true',
                  help='Enable CUDA and CuDNN [NO]')
-cmd.add_argument('--cumulate-error', dest='cumulate_error', action='store_true',
+cmd.add_argument('-cerr', '--cumulate-error', dest='cumulate_error', action='store_true',
                  help='When training different blocks accumulate errors of all blocks for training [NO]')
 cmd.add_argument('-O', '--single-optimizer', dest='single_opt', action='store_true',
                  help='Runs the optimization using a single optimizer for the all structure [NO]')
@@ -67,9 +69,11 @@ cmd.add_argument('-tg', '--telegram', dest='telegram', action='store_true',
 cmd_args = cmd.parse_args()
 
 # Handles the command line arguments and check everything is ok
+cmd_args.batchsize = cmd_args.batchsize[0]
 try:
     assert os.path.isfile(' '.join(cmd_args.dataset)), "Dataset file [%s] does not exist" % ' '.join(cmd_args.dataset)
     assert os.path.isfile(' '.join(cmd_args.support)), "Support file [%s] does not exist" % ' '.join(cmd_args.support)
+    assert os.path.isfile(' '.join(cmd_args.cae_config)), "Configuration file file [%s] does not exist" % ' '.join(cmd_args.cae_config)
     assert cmd_args.stepsize  > 0,                     "Step size must be a positive integer"
     assert cmd_args.batchsize > 0,                     "Batch size must be a positive integer"
     assert cmd_args.learnrate  > 0.0,                   "Batch size must be a positive float"
@@ -130,7 +134,7 @@ tf.app.flags.DEFINE_integer('max_steps',
                             cmd_args.stepsize,
                             "Number of steps for the optimizer on each batch")
 tf.app.flags.DEFINE_integer('batch_size',
-                            cmd_args.stepsize,
+                            cmd_args.batchsize,
                             "Number of elements in each batch")
 tf.app.flags.DEFINE_boolean('log_device_placement',
                             DEVICE_PLACEMENT_LOG,
@@ -145,118 +149,43 @@ tf.app.flags.DEFINE_float('learning_rate',
                           cmd_args.learnrate,
                           "Optimizer learning rate")
 
-#   ___           __ _                    _   _
-#  / __|___ _ _  / _(_)__ _ _  _ _ _ __ _| |_(_)___ _ _
-# | (__/ _ \ ' \|  _| / _` | || | '_/ _` |  _| / _ \ ' \
-#  \___\___/_||_|_| |_\__, |\_,_|_| \__,_|\__|_\___/_||_|
-#                     |___/
+#  _                 _ _              ___               _
+# | |   ___  __ _ __| (_)_ _  __ _   / __|_ _ __ _ _ __| |_
+# | |__/ _ \/ _` / _` | | ' \/ _` | | (_ | '_/ _` | '_ \ ' \
+# |____\___/\__,_\__,_|_|_||_\__, |  \___|_| \__,_| .__/_||_|
+#                            |___/                |_|
+print("Loading the graph...")
+with open(' '.join(cmd_args.cae_config), "rb") as fp:
+    try:
+        sets = pickle.load(fp)
+    except Exception as e:
+        print(("ERROR: {}").format(e))
+        exit(1)
 
-sets1 = autoencoder.ConvAutoEncSettings()
-sets1.prefix_name = "alpha"
-sets1.input_shape = [FLAGS.batch_size, 161, 161, 1]
-sets1.corruption = False
-sets1.layers = 1
-sets1.patch_size = 5
-sets1.strides = [1, 2, 2, 1]
-sets1.padding = 'SAME'
-sets1.depth_increasing = 4
-sets1.residual_learning = cmd_args.residuals
+for s in sets:
+    s.input_shape[0] = FLAGS.batch_size
+print("Done!")
 
-sets2 = autoencoder.ConvAutoEncSettings()
-sets2.prefix_name = "beta"
-sets2.input_shape = [FLAGS.batch_size, 81, 81, 5]
-sets2.corruption = False
-sets2.layers = 1
-sets2.patch_size = 5
-sets2.strides = [1, 2, 2, 1]
-sets2.padding = 'SAME'
-sets2.depth_increasing = 4
-sets2.residual_learning = cmd_args.residuals
-
-sets3 = autoencoder.ConvAutoEncSettings()
-sets3.prefix_name = "gamma"
-sets3.input_shape = [FLAGS.batch_size, 41, 41, 9]
-sets3.corruption = False
-sets3.layers = 1
-sets3.patch_size = 5
-sets3.strides = [1, 2, 2, 1]
-sets3.padding = 'SAME'
-sets3.depth_increasing = 4
-sets3.residual_learning = cmd_args.residuals
-
-sets4 = autoencoder.ConvAutoEncSettings()
-sets4.prefix_name = "delta"
-sets4.input_shape = [FLAGS.batch_size, 21, 21, 13]
-sets4.corruption = False
-sets4.layers = 1
-sets4.patch_size = 5
-sets4.strides = [1, 2, 2, 1]
-sets4.padding = 'SAME'
-sets4.depth_increasing = 4
-sets4.residual_learning = cmd_args.residuals
-
-sets5 = autoencoder.ConvAutoEncSettings()
-sets5.prefix_name = "epsilon"
-sets5.input_shape = [FLAGS.batch_size, 11, 11, 17]
-sets5.corruption = False
-sets5.layers = 1
-sets5.patch_size = 5
-sets5.strides = [1, 2, 2, 1]
-sets5.padding = 'SAME'
-sets5.depth_increasing = 4
-sets5.residual_learning = cmd_args.residuals
-
-sets6 = autoencoder.ConvAutoEncSettings()
-sets6.prefix_name = "zeta"
-sets6.input_shape = [FLAGS.batch_size, 6, 6, 21]
-sets6.corruption = False
-sets6.layers = 1
-sets6.patch_size = 5
-sets6.strides = [1, 2, 2, 1]
-sets6.padding = 'SAME'
-sets6.depth_increasing = 4
-sets6.residual_learning = cmd_args.residuals
-
-sets = (
-    sets1,
-    sets2,
-    sets3,
-    sets4,
-    sets5,
-    sets6
-)
-
-#              _
-#  ___ _ _  __| |
-# / -_) ' \/ _` |
-# \___|_||_\__,_|
-
-
-#  _____       _
-# |_   _|__ __| |_ ___
-#   | |/ -_|_-<  _(_-<
-#   |_|\___/__/\__/__/
-
-
-#              _
-#  ___ _ _  __| |
-# / -_) ' \/ _` |
-# \___|_||_\__,_|
-
-# Check if there is a checkpoint to restore
-RESTORE = os.path.isfile(FLAGS.saver_dir)
-
-# Loading the Convolutional Autoencoder
 stack = autoencoder.ConvAutoEncStack(sets)
 
+#              _
+#  ___ _ _  __| |
+# / -_) ' \/ _` |
+# \___|_||_\__,_|
+
+
+# Check if there is a checkpoint to restore
+# RESTORE = os.path.isfile(FLAGS.saver_dir)
+
+# Loading the Convolutional Autoencoder
 merged = tf.merge_all_summaries()
 writer = tf.train.SummaryWriter(FLAGS.train_dir, stack.graph)
 counter = 0
 
 # try:
-dh = DataHandler(FLAGS.dataset_file, FLAGS.support_file, tuple(sets1.input_shape))
+dh = DataHandler(FLAGS.dataset_file, FLAGS.support_file, tuple(sets[0].input_shape))
 losses_string = ""
-stack.writeConfiguration(os.path.join(FLAGS.train_dir, "config.txt"))
+# stack.writeConfiguration(os.path.join(FLAGS.train_dir, "config.txt"))
 
 if cmd_args.single_opt:
     result = [None, 99999999.9999999]

@@ -126,6 +126,7 @@ class ConvAutoEncSettings(object):
 
         Requires a ``list`` of positive ``int`` greater than zero as input.
         **Please note that image width and image height must be equal**.
+        Th first element of the list, that is the batch size, can be ``None``.
 
         :param value: the input shape
         :type value: list
@@ -138,7 +139,7 @@ class ConvAutoEncSettings(object):
     def input_shape(self, value):
         if value:
             self._checkList(value)
-            for v in value:
+            for v in value[1:-1]:
                 self._checkInt(v)
                 if v <= 0:
                     raise ArgumentError("Values must be positive")
@@ -1285,6 +1286,8 @@ class ConvAutoEncStack:
                 target += cae.error
             with tf.name_scope("summaries"):
                 tf.scalar_summary("cumulative-cost", target)
+        else:
+            target = self.caes[0].error
 
         # Define the optimizator
         for cae in self.caes:
