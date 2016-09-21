@@ -684,6 +684,7 @@ class ConvAutoEnc(object):
             self.defineEncoder()
             self.defineDecoder()
             self.defineCost()
+            self.defineSaver()
 
     def __getattribute__(self, key):
         r"""
@@ -1325,6 +1326,8 @@ class ConvAutoEncStack:
 
         The training iterates through the model **reconnecting temporarily** the encoder output and
         the decoder input.
+
+        :returns: :class:`ConvAutoEncStack` current instance
         """
         for n in range(0, self.len()):
             cae = self.caes[n]
@@ -1335,7 +1338,7 @@ class ConvAutoEncStack:
         return self
 
     def writeConfiguration(self, f):
-        """
+        r"""
         Writes the caes configuration in an ascii file.
 
         :param f: filename to write into
@@ -1350,7 +1353,7 @@ class ConvAutoEncStack:
         return self
 
     def singleOptimizer(self):
-        """
+        r"""
         Whole elements optimizer. Optimize everything in only one round, using the external error
 
         :returns: :class:`ConvAutoEncStack` current instance
@@ -1359,4 +1362,58 @@ class ConvAutoEncStack:
             self.optimizer = tf.train.AdamOptimizer(
                 self.FLAGS.learning_rate,
                 name="common-optimizer").minimize(self.error)
+        return self
+
+    def defineSaver(self):
+        r"""
+        Define a ``tf.train.Saver`` object to save variables of the autoencoder.
+        For each block and layer, it will save:
+
+         * weights
+         * biases for encoder
+         * biases for decoder
+
+        :returns: :class:`ConvAutoEncStack` current instance
+        """
+        var_list = []
+        for cae in self.caes:
+            for layer in self.layers:
+                var_list.append(cae.weights[layer])
+                var_list.append(cae.biases_encoder[layer])
+                var_list.append(cae.biases_decoder[layer])
+        self.saver = tf.train.Saver(var_list)
+        return self
+
+    def save(self, filename, session=tf.get_default_session()):
+        r"""
+        Saves current graph variables value.
+
+        :param filename: check point file name
+        :type filename: str
+        :param session: current active session, defaults to ``tf.get_default_session()``
+        :type session: ``tf.Session``
+        :raises: AssertionError
+        """
+        assert type(filename) is str, "filename must be a str"
+        assert type(session) is tf.Session, "session must be a tf.Session"
+        self.saver.save(session, filename)
+        return self
+
+    def restore(self, filename, session=tf.get_default_session()):
+        r"""
+        Restores a previous session. It will provide only:
+
+         * weights
+         * biases for encoder
+         * biases for decoder
+
+        :param filename: check point file name
+        :type filename: str
+        :param session: current active session, defaults to ``tf.get_default_session()``
+        :type session: ``tf.Session``
+        :raises: AssertionError
+        """
+        assert type(filename) is str, "filename must be a str"
+        assert type(session) is tf.Session, "session must be a tf.Session"
+        self.saver.restore(session, filename)
         return self

@@ -259,6 +259,8 @@ else:
 with open(os.path.join(FLAGS.train_dir, "loss_report.csv"), "w") as f:
     f.write(losses_string)
 
+stack.save("/tmp/results.ckpt", session)
+
 # from autoenc_shell import ConvAutoEncShell
 ConvAutoEncShell({
     "objects": 3,
