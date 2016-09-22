@@ -7,3 +7,4 @@ checkpoint
 *.ckpt*
 .doc/_build/*
 .doc/_build
+lib/__picache__/*
