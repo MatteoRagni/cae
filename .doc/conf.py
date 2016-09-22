@@ -61,8 +61,8 @@ master_doc = 'index'
 
 # General information about the project.
 project = 'Convolutional Autoencoder'
-copyright = '2016, Matteo Ragni, David Windridge'
-author = 'Matteo Ragni, David Windridge'
+copyright = '2016, Matteo Ragni, David Windridge, Paolo Bosetti'
+author = 'Matteo Ragni, David Windridge, Paolo Bosetti'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the

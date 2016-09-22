@@ -23,7 +23,7 @@ from autoenc_shell import ConvAutoEncShell
 # PARSING COMMAND LINE ARGUMENTS
 cmd = ArgumentParser(prog="caes-bin",
                      description="Stacked Convolutional Autoencoder",
-                     epilog="Matteo Ragni, David Windridge - 2016")
+                     epilog="Matteo Ragni, David Windridge, Paolo Bosetti - 2016")
 
 DEFAULT_TRAINING_DIR  = '/tmp/training_nn'
 CURRENT_TRAINING_TIME = timestring()

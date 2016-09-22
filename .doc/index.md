@@ -9,47 +9,12 @@ Welcome to Convolutional Autoencoder's documentation!
 Indices
 -------
 
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
-
-
-Convolutional Auto Encoder module
----------------------------------
-.. automodule:: autoencoder
-
-Stack Representation
---------------------
-.. autoclass:: autoencoder.ConvAutoEncStack
-   :members:
-
-Basic Block representation
---------------------------
-.. autoclass:: autoencoder.ConvAutoEnc
-   :members: __init__, _corrupt, graph, leakRelu, defineInput, defineEncoder, defineDecoder, defineCost, add1summary, add2summary, add3summary, addXsummary, _reshapeTensor, addRsummary, defineOptimizer
-
-Configuration class
--------------------
-.. autoclass:: autoencoder.ConvAutoEncSettings
-  :members:
-
-Utilities
----------
-.. autoclass:: data_handler.DataHandler
-   :members: __init__, loop, _buildElement
-
-.. autoclass:: data_handler.DataPreparator
-   :members: __init__, loadFileNames, saveBatches, saveSupport, emptyBatch, loadFile
-
-.. autoclass:: autoencoder.ArgumentError
-
-.. autoclass:: tg_notifier.TelegramNotifier
-   :members: __init__, post
-
-.. autoclass:: timer.Timer
-
-Indices and tables
-------------------
+* :doc:`index`
+* :doc:`autoencoder`
+* :doc:`autoencoder_stack`
+* :doc:`autoencoder_block`
+* :doc:`autoencoder_settings`
+* :doc:`utilities`
 
 * :ref:`genindex`
 * :ref:`modindex`
