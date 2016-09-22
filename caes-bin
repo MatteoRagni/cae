@@ -33,7 +33,7 @@ DEFAULT_BATCH_SIZE    = 10
 DEFAULT_STEP_SIZE     = 10
 DEFAULT_LEARN_RATE    = 0.001
 VERBOSITY             = 1
-BATCH_LIMIT           = 8
+BATCH_LIMIT           = 1
 
 # TODO: Modify run and training dir to add a single
 # voice to define the path, and another to define the run.
@@ -259,7 +259,7 @@ else:
 with open(os.path.join(FLAGS.train_dir, "loss_report.csv"), "w") as f:
     f.write(losses_string)
 
-stack.save("/tmp/results.ckpt", session)
+stack.save("/tmp/results.ckpt")
 
 # from autoenc_shell import ConvAutoEncShell
 ConvAutoEncShell({

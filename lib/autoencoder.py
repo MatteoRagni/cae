@@ -684,7 +684,6 @@ class ConvAutoEnc(object):
             self.defineEncoder()
             self.defineDecoder()
             self.defineCost()
-            self.defineSaver()
 
     def __getattribute__(self, key):
         r"""
@@ -1167,6 +1166,7 @@ class ConvAutoEncStack:
         self.initializeGraph()
         self.initializeSession()
         self.initializeBlocks()
+        self.defineSaver()
 
     def len(self):
         r"""
@@ -1377,29 +1377,31 @@ class ConvAutoEncStack:
         """
         var_list = []
         for cae in self.caes:
-            for layer in self.layers:
+            for layer in range(cae.layers):
                 var_list.append(cae.weights[layer])
                 var_list.append(cae.biases_encoder[layer])
                 var_list.append(cae.biases_decoder[layer])
         self.saver = tf.train.Saver(var_list)
         return self
 
-    def save(self, filename, session=tf.get_default_session()):
+    def save(self, filename, session=None):
         r"""
         Saves current graph variables value.
 
         :param filename: check point file name
         :type filename: str
-        :param session: current active session, defaults to ``tf.get_default_session()``
+        :param session: current active session, defaults to ``self.session``
         :type session: ``tf.Session``
         :raises: AssertionError
         """
         assert type(filename) is str, "filename must be a str"
-        assert type(session) is tf.Session, "session must be a tf.Session"
+        # assert type(session) is tf.Session, "session must be a tf.Session"
+        if session is None:
+            session = self.session
         self.saver.save(session, filename)
         return self
 
-    def restore(self, filename, session=tf.get_default_session()):
+    def restore(self, filename, session=None):
         r"""
         Restores a previous session. It will provide only:
 
@@ -1414,6 +1416,8 @@ class ConvAutoEncStack:
         :raises: AssertionError
         """
         assert type(filename) is str, "filename must be a str"
-        assert type(session) is tf.Session, "session must be a tf.Session"
+        # assert type(session) is tf.Session, "session must be a tf.Session"
+        if session is None:
+            session = self.session
         self.saver.restore(session, filename)
         return self
