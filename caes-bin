@@ -11,75 +11,111 @@ from __future__ import print_function
 import sys
 sys.path.insert(0, './lib')
 
-import pdb
 import os
 from timer import Timer
-from timer import timestring
-import json
+import timer
 from argparse import ArgumentParser
 from data_handler import DataHandler
 from autoenc_shell import ConvAutoEncShell
+import tensorflow as tf
 
-# PARSING COMMAND LINE ARGUMENTS
-cmd = ArgumentParser(prog="caes-bin",
-                     description="Stacked Convolutional Autoencoder",
-                     epilog="Matteo Ragni, David Windridge, Paolo Bosetti - 2016")
 
-DEFAULT_TRAINING_DIR  = '/tmp/training_nn'
-CURRENT_TRAINING_TIME = timestring()
-DEFAULT_RUNNING_DIR   = os.path.join(DEFAULT_TRAINING_DIR, CURRENT_TRAINING_TIME + '-run')
-DEFAULT_SAVING_DIR    = os.path.join(DEFAULT_TRAINING_DIR, 'save-' + CURRENT_TRAINING_TIME + '-cae.ckpt')
-DEFAULT_BATCH_SIZE    = 10
-DEFAULT_STEP_SIZE     = 10
-DEFAULT_LEARN_RATE    = 0.001
-VERBOSITY             = 1
-BATCH_LIMIT           = 1
+# Parsing command line arguments
+class ConvAutoEncArgParse(ArgumentParser):
 
-# TODO: Modify run and training dir to add a single
-# voice to define the path, and another to define the run.
+    def initialize(self):
+        self.identifier = timer.timestring()
 
-cmd.add_argument('-cae', '--cae-config', dest='cae_config', type=str, nargs=1, required=True,
-                 help='Configuration of the autoencoder structure')
-cmd.add_argument('-in', dest='dataset', type=str, nargs=1, required=True,
-                 help='Input dataset for the training')
-cmd.add_argument('-sp', dest='support', type=str, nargs=1, required=True,
-                 help='Input dataset as support file')
-cmd.add_argument('-gpu', dest='gpu', action='store_true',
-                 help='Enable CUDA and CuDNN [NO]')
-cmd.add_argument('-cerr', '--cumulate-error', dest='cumulate_error', action='store_true',
-                 help='When training different blocks accumulate errors of all blocks for training [NO]')
-cmd.add_argument('-O', '--single-optimizer', dest='single_opt', action='store_true',
-                 help='Runs the optimization using a single optimizer for the all structure [NO]')
-cmd.add_argument('-r', '--run', dest='runs', type=str, nargs=1, default=DEFAULT_RUNNING_DIR,
-                 help='Define a specific run directory [%s]' % DEFAULT_RUNNING_DIR)
-cmd.add_argument('-s', '--save', dest='save', type=str, nargs=1, default=DEFAULT_SAVING_DIR,
-                 help='NOT IMPLEMENTED - Define save positions for the result of the training, as checkpoint [%s]' % DEFAULT_SAVING_DIR)
-cmd.add_argument('-bs', '--batchsize', dest='batchsize', type=int, nargs=1, default=DEFAULT_BATCH_SIZE,
-                 help='Define the size of each batch. It must be compatible with RAM or VRAM capabilities. It must be positive [%d]' % DEFAULT_BATCH_SIZE)
-cmd.add_argument('-ss', '--stepsize', dest='stepsize', type=int, nargs=1, default=DEFAULT_STEP_SIZE,
-                 help='Define the number of step optimizer will run on each batch. It must be positive [%d]' % DEFAULT_STEP_SIZE)
-cmd.add_argument('-lr', '--learnrate', dest='learnrate', type=float, nargs=1, default=DEFAULT_LEARN_RATE,
-                 help='Define the learning rate for the optimizer [%f]' % DEFAULT_LEARN_RATE)
-cmd.add_argument('-v', '--verbosity', dest='verb', type=int, nargs=1, default=VERBOSITY,
-                 help='Define verbosity level, from 0 to 3 [%d]' % VERBOSITY)
-cmd.add_argument('-rl', '--residual-learning', dest='residuals', action='store_true',
-                 help='Enable residual learning (NO -> y = f(g(x)), YES -> y = f(g(x)) + x) [NO]')
-cmd.add_argument('-tg', '--telegram', dest='telegram', action='store_true',
-                 help='Enable notifications using system telegram bot [NO]')
-cmd_args = cmd.parse_args()
+        # Id options
+        self.add_argument('-id', '--identifier', dest='identifier', type=str, nargs=1, default=[self.identifier],
+            help='Training identifier - time base [{}]'.format(self.identifier))
+
+        # File options
+        self.add_argument('-w', '--workspace', dest='workspace', type=str, nargs=1, required=True,
+            help='Workspace directory. Will contain run files generated during training and inference')
+        self.add_argument('-d', dest='dataset', type=str, nargs=1, required=True,
+            help='Dataset directory. Must contain training and inference datasets')
+        self.add_argument('-m', '--model', dest='model', type=str, nargs=1, required=True,
+            help='Model binary file')
+
+        self.add_argument('--training-id', dest='training_id', type=str, nargs=1,
+            default=['train-' + self.identifier],
+            help='Run directory will be created inside workspace')
+        self.add_argument('-s', '--save', dest='save_file', type=str, nargs=1,
+            help='Checkpoint saving file')
+        self.add_argument('-l', '--load', dest='load_file', type=str, nargs=1,
+            help='Checkpoint loading file (will skip training)')
+
+        # Training options
+        self.add_argument('-bs', '--batch-size', dest='batch_size', type=int, nargs=1, default=10,
+            help='Batch size (number of examples for learning step)')
+        self.add_argument('-sz', '--step-size', dest='step_size', type=int, nargs=1, default=10,
+            help='Number of reiteratios on a single batch')
+        self.add_argument('-bb', '--batch-block', dest='batch_block', type=int, nargs=1, default=8,
+            help='Number of blocks of batches to be loaded (1 batch = 1000 figures)')
+
+        self.add_argument('--learning-rate', dest='learn_rate', type=float, nargs=1, default=0.001,
+            help='Learning rate hyper-parameters')
+        self.add_argument('--residual-learning', dest='residuals', action='store_true',
+            help='Enable residual learning (NO -> y = f(g(x)), YES -> y = f(g(x)) + x) [NO]')
+
+        # Other Options
+        self.add_argument('--notify', dest='notification', action='store_true', default=False,
+            help='Enable notifications using system telegram bot, at the end of the learning')
+
+    def run(self):
+        self.parse_args()
+        return self._handleFiles()._handleTraining()
+
+    def _handleFiles(self):
+        self.training_file  = os.path.join(' '.join(self.dataset), 'training.pickle')
+        self.inference_file = os.path.join(' '.join(self.dataset), 'inference.pickle')
+        self.model = os.path.join(' '.join(self.model))
+        self.load_file = os.path.join(' '.join(self.load_file))
+        self.save_file = os.path.join(' '.join(self.save_file))
+
+        assert os.path.isfile(self.training_file),
+            "Dataset file {} does not exist".format(self.training_file)
+        assert os.path.isfile(self.inference_file),
+            "Inference file {} does not exist".format(self.inference_file)
+        assert os.path.isfile(self.model),
+            "Model file {} does not exist".format(self.model)
+        assert os.path.isfile(self.load_file),
+            "Restored model {} does not exist".format(self.load_file)
+
+        self.workspace = os.path.join(' '.join(self.workspace))
+        self.training_dir = os.path.join(self.workspace, self.training_dir)
+        return self
+
+    def _handleTraining(self):
+        if type(self.batch_size) is list:
+            self.batch_size = self.batch_size[0]
+        assert self.batch_size > 0, "Batch size must be positive"
+        if type(self.step_size) is list:
+            self.step_size = self.step_size[0]
+        assert self.step_size > 0, "Batch size must be positive"
+        if type(self.batch_block) is list:
+            self.batch_block = self.batch_block[0]
+        assert self.batch_block > 0, "Batch size must be positive"
+        if type(self.learn_rate) is list:
+            self.learn_rate = self.learn_rate[0]
+        assert self.learn_rate > 0, "Batch size must be positive"
+        return self
+
+
+cmd = ConvAutoEncArgParse(prog="caes-bin",
+    description="Stacked Convolutional Autoencoder",
+    epilog="Matteo Ragni, David Windridge, Paolo Bosetti - 2016")
+
+cmd_args = cmd.run()
+
+###################################################################################################
+###################################################################################################
+###################################################################################################
+###################################################################################################
+
 
 # Handles the command line arguments and check everything is ok
-cmd_args.batchsize = cmd_args.batchsize[0]
-try:
-    assert os.path.isfile(' '.join(cmd_args.dataset)), "Dataset file [%s] does not exist" % ' '.join(cmd_args.dataset)
-    assert os.path.isfile(' '.join(cmd_args.support)), "Support file [%s] does not exist" % ' '.join(cmd_args.support)
-    assert os.path.isfile(' '.join(cmd_args.cae_config)), "Configuration file file [%s] does not exist" % ' '.join(cmd_args.cae_config)
-    assert cmd_args.stepsize  > 0,                     "Step size must be a positive integer"
-    assert cmd_args.batchsize > 0,                     "Batch size must be a positive integer"
-    assert cmd_args.learnrate  > 0.0,                   "Batch size must be a positive float"
-except AssertionError as error:
-    print("Input Error: " + str(error))
-    exit(126)
 
 if cmd_args.verb > 3:
     VERBOSITY = 3
