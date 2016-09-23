@@ -73,8 +73,7 @@ class ConvAutoEnc(object):
     def __init__(self, settings, build_now=True):
         r"""
         Initializes the block, using the helper class :class:`ConvAutoEncSettings`, that contains all
-        about the current block configuration. The use of **GPU** is defined on the basis of the
-        application :py:attr:`~FLAGS` variables.
+        about the current block configuration. CUDA Gpu use is forced.
         _Please consider that all high level attribute (withoust leading ``__``) are inherit in this
         class as first level citizen, and accessible directly, but cannot be modified after object
         instanciation.
@@ -259,7 +258,7 @@ class ConvAutoEnc(object):
                     h_layer = tf.add(
                         tf.nn.conv2d(x_current, W, strides=self.strides,
                                      padding=self.padding, name=name_conv,
-                                     use_cudnn_on_gpu=self.FLAGS.gpu_enabled),
+                                     use_cudnn_on_gpu=True),
                         B, name=name_sum
                     )
                     x_current = self.leakRelu(h_layer, name=name_out)
@@ -369,7 +368,7 @@ class ConvAutoEnc(object):
                 self.add1summary(self.error, self.prefix_name + '-error')
         return self
 
-    def defineOptimizer(self, target=None, opt="ADAM"):
+    def defineOptimizer(self, learning_rate, target=None, opt="ADAM"):
         r"""
         Define the optimizer relative to this particular block. The definitions contains a list of variable
         that can be optimized by this particular block, that are:
@@ -390,6 +389,8 @@ class ConvAutoEnc(object):
 
         :warning: as for now, it inherits the dafault session only.
 
+        :param learning_rate: the learning rate for the optimizer
+        :type learning_rate: float
         :param target: the target for the optimization if different from layer cost
         :type target: tensorflow.Tensor, None
         :param opt: type of optimizer to define: for now only ``"ADAM"`` available
@@ -398,6 +399,7 @@ class ConvAutoEnc(object):
         :raises: AssertionError, RuntimeError
         """
         assert type(opt) is str, "opt must be a str"
+        assert type(learning_rate) is float, "learning rate must be a float"
         if target is not None:
             assert type(target) is tf.Tensor, "target must be a tensor"
         else:
@@ -409,7 +411,7 @@ class ConvAutoEnc(object):
 
         with tf.name_scope(self.prefix_name + "-" + "optimizer"):
             self.optimizer = tf.train.AdamOptimizer(
-                self.FLAGS.learning_rate,
+                learning_rate,
                 name=self.prefix_name + "-optimizer").minimize(
                     target,
                     var_list=(self.weights + self.biases_encoder + self.biases_decoder))

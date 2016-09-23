@@ -6,6 +6,8 @@ import autoencoder
 import numpy as np
 import os
 import timer
+import pdb
+import time
 from data_handler import DataHandler
 from six.moves import cPickle as pickle
 from argparse import ArgumentParser
@@ -53,8 +55,9 @@ class ConvAutoEncArgParse(ArgumentParser):
 
         self.add_argument('--learning-rate', dest='learn_rate', type=float, nargs=1, default=0.001,
             help='Learning rate hyper-parameters')
-        self.add_argument('--residual-learning', dest='residuals', action='store_true',
+        self.add_argument('--residual-learning', dest='residual_learning', action='store_true',
             help='Enable residual learning (NO -> y = f(g(x)), YES -> y = f(g(x)) + x) [NO]')
+        self.namespace = None
 
         # Other Options
         # self.add_argument('--notify', dest='notification', action='store_true', default=False,
@@ -62,38 +65,55 @@ class ConvAutoEncArgParse(ArgumentParser):
         return None
 
     def run(self):
-        self.initialize().parse_args()
+        self.namespace = self.parse_args()
         return self._handleFiles()._handleTraining()
 
     def _handleFiles(self):
-        self.training_file  = os.path.join(' '.join(self.dataset), 'training.pickle')
-        self.inference_file = os.path.join(' '.join(self.dataset), 'inference.pickle')
-        self.model = os.path.join(' '.join(self.model))
-        self.load_file = os.path.join(' '.join(self.load_file))
-        self.save_file = os.path.join(' '.join(self.save_file))
+        # pdb.set_trace()
+        self.training_file  = os.path.join(' '.join(self.namespace.dataset), 'training.pickle')
+        self.inference_file = os.path.join(' '.join(self.namespace.dataset), 'inference.pickle')
+        self.model = os.path.join(' '.join(self.namespace.model))
+        if self.namespace.load_file:
+            self.load_file = os.path.join(' '.join(self.namespace.load_file))
+            assert os.path.isfile(self.load_file), "Restored model {} does not exist".format(self.load_file)
+        else:
+            self.load_file = ""
+
+        if self.namespace.save_file:
+            self.save_file = os.path.join(' '.join(self.namespace.save_file))
+        else:
+            self.save_file = ""
 
         assert os.path.isfile(self.training_file), "Dataset file {} does not exist".format(self.training_file)
         assert os.path.isfile(self.inference_file), "Inference file {} does not exist".format(self.inference_file)
         assert os.path.isfile(self.model), "Model file {} does not exist".format(self.model)
-        assert os.path.isfile(self.load_file), "Restored model {} does not exist".format(self.load_file)
 
-        self.workspace = os.path.join(' '.join(self.workspace))
-        self.training_dir = os.path.join(self.workspace, self.training_dir)
+        self.workspace = os.path.join(' '.join(self.namespace.workspace))
+        self.training_dir = os.path.join(self.workspace, ' '.join(self.namespace.identifier))
         return self
 
     def _handleTraining(self):
-        if type(self.batch_size) is list:
+        if type(self.namespace.batch_size) is list:
             self.batch_size = self.batch_size[0]
+        else:
+            self.batch_size = self.namespace.batch_size
         assert self.batch_size > 0, "Batch size must be positive"
-        if type(self.steps) is list:
-            self.steps = self.steps[0]
-        assert self.step_size > 0, "Batch size must be positive"
-        if type(self.batch_block) is list:
-            self.batch_block = self.batch_block[0]
+        if type(self.namespace.steps) is list:
+            self.steps = self.namespace.steps[0]
+        else:
+            self.steps = self.namespace.steps
+        assert self.namespace.steps > 0, "Step size must be positive"
+        if type(self.namespace.batch_block) is list:
+            self.batch_block = self.namespace.batch_block[0]
+        else:
+            self.batch_block = self.namespace.batch_block
         assert self.batch_block > 0, "Batch size must be positive"
-        if type(self.learn_rate) is list:
-            self.learn_rate = self.learn_rate[0]
+        if type(self.namespace.learn_rate) is list:
+            self.learn_rate = self.namespace.learn_rate[0]
+        else:
+            self.learn_rate = self.namespace.learn_rate
         assert self.learn_rate > 0, "Batch size must be positive"
+        self.residual_learning = self.namespace.residual_learning
         return self
 
 #  _                      _             ___ _        _ _
@@ -113,16 +133,17 @@ class ConvAutoEncShell(cmd.Cmd):
         assert type(config) is ConvAutoEncArgParse, "Configuration must be a ConvAutoEncArgParse"
 
         super(ConvAutoEncShell, self).__init__()
-        config.parse_args()
+        config.run()
         self.flags = config
         self.hallucinate = {"on": 1.0, "off": 0.0}
         self.config = {"objects": 3, "positions": 25}
 
-        self.loadDataset()
-
         self.inner_shape = None
         self._loadModel()
+        self._loadDataset()
+
         self.writer = self._createWriter(self.flags.training_dir)
+
         if not self._existRestore():
             self._learnModel()
 
@@ -152,7 +173,7 @@ class ConvAutoEncShell(cmd.Cmd):
                 sets = pickle.load(fp)
                 for s in sets:
                     s.input_shape[0] = self.flags.batch_size
-                self.model = autoencoder.ConvAutoEncStack(sets, self.flags.learning_rate)
+                self.model = autoencoder.ConvAutoEncStack(sets, self.flags.learn_rate)
                 self.graph = self.model.graph
                 self.session = self.model.session
                 self.merged = tf.merge_all_summaries()
@@ -161,6 +182,7 @@ class ConvAutoEncShell(cmd.Cmd):
                 return self
         except Exception as e:
             self.print_err(("Cannot load model: {}").format(e))
+            pdb.stack_trace()
             exit(1)
 
     def _existRestore(self):
@@ -173,14 +195,16 @@ class ConvAutoEncShell(cmd.Cmd):
                 return True
         except Exception as e:
             self.print_err("Error: {}".format(e))
+            pdb.stack_trace()
             return None
 
-    def _realoadLearning(self):
+    def _reloadLearning(self):
         try:
             self.model.restore(self.flags.load_file)
             return self
         except Exception as e:
             self.print_err("Error: {}".format(e))
+            pdb.stack_trace()
             exit(1)
 
     def _createWriter(self, fl):
@@ -188,16 +212,18 @@ class ConvAutoEncShell(cmd.Cmd):
             return tf.train.SummaryWriter(fl, self.graph)
         except Exception as e:
             self.print_err("Error: {}".format(e))
+            pdb.stack_trace()
             return None
 
     def _loadDataset(self):
         try:
-            self.dataset = DataHandler(self.flags.dataset_file,
+            self.dataset = DataHandler(self.flags.training_file,
                 self.flags.inference_file,
                 tuple(self.model.caes[0].input_shape))
             return self.dataset
         except Exception as e:
             self.print_err("Error: {}".format(e))
+            pdb.stack_trace()
             return None
 
 
@@ -208,7 +234,7 @@ class ConvAutoEncShell(cmd.Cmd):
                 result = [None, 10e10]
                 with tf.name_scope("TRAINING-%d" % n):
                     current_batch = -1
-                    for batch_no, dataset in self.dataset(self.flags.batch_size, self.flags.batch_block):
+                    for batch_no, dataset in self.dataset.loop(self.flags.batch_size, self.flags.batch_block):
                         # Printing
                         if current_batch != batch_no:
                             current_batch = batch_no
@@ -235,6 +261,7 @@ class ConvAutoEncShell(cmd.Cmd):
             self.print_done("Training complete")
         except Exception as e:
             self.print_err("Error: {}".format(e))
+            pdb.stack_trace()
 
         return self
 

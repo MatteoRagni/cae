@@ -8,3 +8,5 @@ checkpoint
 .doc/_build/*
 .doc/_build
 lib/__picache__/*
+*.zip
+*.7z

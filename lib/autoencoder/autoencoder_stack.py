@@ -201,7 +201,7 @@ class ConvAutoEncStack:
 
         # Define the optimizator
         for cae in self.caes:
-            cae.defineOptimizer(target=target)
+            cae.defineOptimizer(self.learning_rate, target=target)
 
         # FIXME : Error function redefined
         # self.error = self.caes[0].error
