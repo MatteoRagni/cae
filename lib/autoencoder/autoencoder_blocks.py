@@ -105,8 +105,6 @@ class ConvAutoEnc(object):
         self.optimizer       = None
         self.session         = None
 
-        self.FLAGS = tf.app.flags.FLAGS
-
         if build_now:
             self.defineInput()
             self.defineEncoder()

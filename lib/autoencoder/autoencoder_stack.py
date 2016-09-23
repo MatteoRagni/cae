@@ -35,11 +35,12 @@ class ConvAutoEncStack:
      * :py:attr:`~error` is the error of the outermost layer
      * :py:attr:`~graph` is the graph on which the model is defined
      * :py:attr:`~session` is the session on which the optimizers are defined
-     * :py:attr:`~FLAGS` is a copy of :py:attr:`tensorflow.flags.FLAGS`
+     * :py:attr:`~learning_rate` is an optimization hyperparameter
+     * :py:attr:`~single_optimizer` define if optimize one shoot or one layer at time
 
     """
 
-    def __init__(self, config_tuple):
+    def __init__(self, config_tuple, learning_rate, single_opt=True):
         r"""
         Initialize a new series of connected block. The configuration of the single block
         is specified with a :class:`ConvAutoEncSettings`. The block order (from the exterior to the interior)
@@ -53,13 +54,19 @@ class ConvAutoEncStack:
 
         :param config_tuple: the series of configurations
         :type config_tuple: tuple
+        :param learning_rate: learning rate decay hyperparameter
+        :type learning_rate: float
+        :param single_opt: type of optimization procedure
+        :type single_opt: bool
         :returns: :class:`ConvAutoEncStack`
         :raises: AssertionError
         """
         assert type(config_tuple) is tuple, "Required a tuple of ConvAutoEncSettings"
+        assert type(learning_rate) is float, "Learning rate must be a float"
+        assert type(single_opt) is bool, "Optimization procedure must be a bool"
         self.caes = []
-
-        self.FLAGS = tf.app.flags.FLAGS
+        self.learning_rate = learning_rate
+        self.single_optimizer = single_opt
 
         for c in config_tuple:
             assert type(c) is ConvAutoEncSettings, "Element in config tuple is not ConvAutoEncSettings"
@@ -146,7 +153,7 @@ class ConvAutoEncStack:
         $$
         and optimize between \\(x\\) and \\(y\\), withouth changing external variables (e.g.: the first block variables)...
 
-        A new added feature is the cumulative error. if ``tensorflow.flags.FLAGS.cumulative_error`` is set to ``True``, than
+        A new added feature is the cumulative error. if :py:attr:`single_optimizer` is set to ``True``, than
         the error that will be considered by each block is the cumulative error of the whole structure
 
         $$
@@ -183,7 +190,7 @@ class ConvAutoEncStack:
 
         # Defines the optimization target
         target = None
-        if self.FLAGS.cumulate_error:
+        if self.single_optimizer:
             target = self.caes[0].error
             for cae in self.caes[1:self.len()]:
                 target += cae.error
@@ -262,7 +269,7 @@ class ConvAutoEncStack:
         """
         with tf.name_scope("common-optimizer"):
             self.optimizer = tf.train.AdamOptimizer(
-                self.FLAGS.learning_rate,
+                self.learning_rate,
                 name="common-optimizer").minimize(self.error)
         return self
 
