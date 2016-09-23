@@ -50,7 +50,7 @@ class ConvAutoEncArgParse(ArgumentParser):
             help='Batch size (number of examples for learning step)')
         self.add_argument('-sz', '--steps', dest='steps', type=int, nargs=1, default=10,
             help='Number of reiteratios on a single batch')
-        self.add_argument('-bb', '--batch-block', dest='batch_block', type=int, nargs=1, default=8,
+        self.add_argument('-bb', '--batch-block', dest='batch_block', type=int, nargs=1, default=10,
             help='Number of blocks of batches to be loaded (1 batch = 1000 figures)')
 
         self.add_argument('--learning-rate', dest='learn_rate', type=float, nargs=1, default=0.001,
@@ -94,7 +94,7 @@ class ConvAutoEncArgParse(ArgumentParser):
 
     def _handleTraining(self):
         if type(self.namespace.batch_size) is list:
-            self.batch_size = self.batch_size[0]
+            self.batch_size = self.namespace.batch_size[0]
         else:
             self.batch_size = self.namespace.batch_size
         assert self.batch_size > 0, "Batch size must be positive"
@@ -163,8 +163,8 @@ class ConvAutoEncShell(cmd.Cmd):
     def print_done(self, s):
         print('\033[92m' + s + '\033[0m')
 
-    def print_learn(self, cb, cnt, res, n):
-        print("RUNNING BATCD: %d (c: %d, e: %.5e) on layer %d" % (cb, cnt, res, n))
+    def print_learn(self, cb, cnt, res):
+        print("RUNNING BATCH: %d (c: %d, e: %.5e) on single layer" % (cb, cnt, res))
 
     def _loadModel(self):
         self.print_info("Loading the graph")
@@ -182,7 +182,7 @@ class ConvAutoEncShell(cmd.Cmd):
                 return self
         except Exception as e:
             self.print_err(("Cannot load model: {}").format(e))
-            pdb.stack_trace()
+            pdb.set_trace()
             exit(1)
 
     def _existRestore(self):
@@ -195,7 +195,7 @@ class ConvAutoEncShell(cmd.Cmd):
                 return True
         except Exception as e:
             self.print_err("Error: {}".format(e))
-            pdb.stack_trace()
+            pdb.set_trace()
             return None
 
     def _reloadLearning(self):
@@ -204,7 +204,7 @@ class ConvAutoEncShell(cmd.Cmd):
             return self
         except Exception as e:
             self.print_err("Error: {}".format(e))
-            pdb.stack_trace()
+            pdb.set_trace()
             exit(1)
 
     def _createWriter(self, fl):
@@ -212,7 +212,7 @@ class ConvAutoEncShell(cmd.Cmd):
             return tf.train.SummaryWriter(fl, self.graph)
         except Exception as e:
             self.print_err("Error: {}".format(e))
-            pdb.stack_trace()
+            pdb.set_trace()
             return None
 
     def _loadDataset(self):
@@ -223,46 +223,47 @@ class ConvAutoEncShell(cmd.Cmd):
             return self.dataset
         except Exception as e:
             self.print_err("Error: {}".format(e))
-            pdb.stack_trace()
+            pdb.set_trace()
             return None
 
 
     def _learnModel(self):
         try:
             counter = 0
-            for session, n, cae, x in self.model.trainBlocks():
-                result = [None, 10e10]
-                with tf.name_scope("TRAINING-%d" % n):
-                    current_batch = -1
-                    for batch_no, dataset in self.dataset.loop(self.flags.batch_size, self.flags.batch_block):
-                        # Printing
-                        if current_batch != batch_no:
-                            current_batch = batch_no
-                            self.print_learn(current_batch, counter, result[1], n)
+            result = [None, 10e10]
+            with tf.name_scope("TRAINING"):
+                current_batch = -1
+                for batch_no, dataset in self.dataset.loop(self.flags.batch_size, self.flags.batch_block):
+                    # Printing
+                    if current_batch != batch_no:
+                        current_batch = batch_no
+                        self.print_learn(current_batch, counter, result[1])
 
-                        # Actual learining steps
-                        with timer.Timer():
-                            for step in range(0, self.flags.steps):
-                                result = self.session.run([cae.optimizer], feed_dict={x: dataset[0]})
-                                counter += 1
+                    # Actual learining steps
+                    with timer.Timer():
+                        for step in range(0, self.flags.steps):
+                            result = self.session.run([self.model.optimizer],
+                                feed_dict={self.model.caes[0].x: dataset[0]})
+                            counter += 1
 
                         # Loss print
                         losses = 0
                         losses_string = "\033[94m%d\033[0m" % counter
                         for im in dataset:
-                            loss = self.session.run(self.model.error, feed_dict={x: im})
+                            loss = self.session.run(self.model.error,
+                                feed_dict={self.model.caes[0].x: im})
                             losses_string += "\t%.5e" % loss
                             losses += loss
                         losses_string += "\t\033[94m%.5e\033[0m" % losses
                         print(losses_string)
 
-                        result = self.session.run([self.merged, cae.error], feed_dict={x: dataset[0]})
+                        result = self.session.run([self.merged, self.model.error],
+                            feed_dict={self.model.caes[0].x: dataset[0]})
                         self.writer.add_summary(result[0], counter)
             self.print_done("Training complete")
         except Exception as e:
             self.print_err("Error: {}".format(e))
-            pdb.stack_trace()
-
+            pdb.set_trace()
         return self
 
 
