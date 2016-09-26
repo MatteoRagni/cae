@@ -266,9 +266,18 @@ class ConvAutoEncShell(cmd.Cmd):
             pdb.set_trace()
         return self
 
-
-
     # COMMAND IMPLEMENTATION
+    def do_save(self, arg):
+        r"""
+        Saves current session state in a checkpoint file. The argument is the file name
+        """
+        try:
+            self.print_info("Saving session...")
+            self.model.save(arg)
+            self.print_done("Session saved in: {}".format(arg))
+        except Exception as e:
+            self.print_err("Error: {}".format(e))
+
     def do_infer_single(self, arg):
         r"""
         Loads support image with one object. It must be provided in the form:
