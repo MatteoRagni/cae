@@ -3,33 +3,42 @@
 ## Binary `cae-bin`
 
 ```
-usage: cae-bin [-h] -in DATASET [-gpu] [-r RUNS] [-s SAVE] [-bs BATCHSIZE]
-               [-ss STEPSIZE] [-lr LEARNRATE] [-v VERB] [-tg]
+usage: caes-bin [-h] [-id IDENTIFIER] -w WORKSPACE -d DATASET -m MODEL
+                [--training-id TRAINING_ID] [-s SAVE_FILE] [-l LOAD_FILE]
+                [-bs BATCH_SIZE] [-sz STEPS] [-bb BATCH_BLOCK]
+                [--learning-rate LEARN_RATE] [--residual-learning]
 
 Stacked Convolutional Autoencoder
 
 optional arguments:
   -h, --help            show this help message and exit
-  -in DATASET           Input dataset for the training
-  -gpu                  Enable CUDA and CuDNN [NO]
-  -r RUNS, --run RUNS   Define a specific run directory, inside the training
-                        directory [/tmp/trinaing_nn/20160609-1607-run]
-  -s SAVE, --save SAVE  Define save positions for the result of the training,
-                        as checkpoint
-                        [/tmp/trinaing_nn/20160609-1607-save/cae.ckpt]
-  -bs BATCHSIZE, --batchsize BATCHSIZE
-                        Define the size of each batch. It must be compatible
-                        with RAM or VRAM capabilities. It must be positive
-                        [10]
-  -ss STEPSIZE, --stepsize STEPSIZE
-                        Define the number of step optimizer will run on each
-                        batch. It must be positive [10]
-  -lr LEARNRATE, --learnrate LEARNRATE
-                        Define the learning rate for the optimizer [0.010000]
-  -v VERB, --verbosity VERB
-                        Define verbosity level, from 0 to 3 [1]
-  -tg, --telegram       Enable notifications using system telegram bot [NO]
+  -id IDENTIFIER, --identifier IDENTIFIER
+                        Training identifier - time base [20160926-1511]
+  -w WORKSPACE, --workspace WORKSPACE
+                        Workspace directory. Will contain run files generated
+                        during training and inference
+  -d DATASET, --dataset DATASET
+                        Dataset directory. Must contain training and inference
+                        datasets
+  -m MODEL, --model MODEL
+                        Model binary file
+  --training-id TRAINING_ID
+                        Run directory will be created inside workspace
+  -s SAVE_FILE, --save SAVE_FILE
+                        Checkpoint saving file
+  -l LOAD_FILE, --load LOAD_FILE
+                        Checkpoint loading file (will skip training)
+  -bs BATCH_SIZE, --batch-size BATCH_SIZE
+                        Batch size (number of examples for learning step)
+  -sz STEPS, --steps STEPS
+                        Number of reiteratios on a single batch
+  -bb BATCH_BLOCK, --batch-block BATCH_BLOCK
+                        Number of blocks of batches to be loaded (1 batch =
+                        1000 figures)
+  --learning-rate LEARN_RATE
+                        Learning rate hyper-parameters
+  --residual-learning   Enable residual learning (NO -> y = f(g(x)), YES -> y
+                        = f(g(x)) + x) [NO]
 
-Matteo Ragni, David Windridge - 2016
-
+Matteo Ragni, David Windridge, Paolo Bosetti - 2016
 ```
