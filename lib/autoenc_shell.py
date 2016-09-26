@@ -141,7 +141,7 @@ class ConvAutoEncShell(cmd.Cmd):
         self.inner_shape = None
         self._loadModel()
         self._loadDataset()
-
+        self.counter = 0
         self.writer = self._createWriter(self.flags.training_dir)
 
         if not self._existRestore():
@@ -260,6 +260,7 @@ class ConvAutoEncShell(cmd.Cmd):
                         result = self.session.run([self.merged, self.model.error],
                             feed_dict={self.model.caes[0].x: dataset[0]})
                         self.writer.add_summary(result[0], counter)
+                        self.counter = counter
             self.print_done("Training complete")
         except Exception as e:
             self.print_err("Error: {}".format(e))
@@ -305,21 +306,6 @@ class ConvAutoEncShell(cmd.Cmd):
         except Exception as e:
             print("ERROR: {}".format(e))
 
-    def do_configure(self, arg):
-        r"""
-        Load configuration to define a new Convolutional autoencoder.
-        Configuration is a pickle file
-        """
-        try:
-            if not os.path.isfile(arg):
-                raise Exception("file does not exist")
-            with open(arg, "rb") as f:
-                conf = pickle.load(f)
-                return conf # TODO: continuare
-
-        except Exception as e:
-            print("ERROR: {}".format(e))
-
     def do_infer_double(self, arg):
         r"""
         Loads support image with double object. It must be provided in the form:
@@ -353,7 +339,7 @@ class ConvAutoEncShell(cmd.Cmd):
         except Exception as e:
             print("ERROR: {}".format(e))
 
-    def do_new_writer(self, arg):
+    def do_create_writer(self, arg):
         """
         Creates a new writer on which save some data
         """
@@ -362,7 +348,7 @@ class ConvAutoEncShell(cmd.Cmd):
                 print("I will close the previous writer first")
                 self.writer.close()
 
-            self.writer = tf.train.SummaryWriter(str(arg), self.config["stack"].graph)
+            self.writer = tf.train.SummaryWriter(os.path.join(self.flags.workspace, str(arg)), self.model.graph)
             print("New writer created")
         except Exception as e:
             print("Cannot create writer: {}".format(e))
@@ -379,9 +365,9 @@ class ConvAutoEncShell(cmd.Cmd):
                 print("Writer not defined. Please create a new writer first")
                 return
 
-            # p = self.config["stack"].len() - 1
-            h = self.config["stack"].inception
-            x = self.config["stack"].caes[0].x
+            # p = self.model.len() - 1
+            h = self.model.inception
+            x = self.model.caes[0].x
             if self.inner_shape is None:
                 self.inner_shape = tuple(h.get_shape().as_list())
             layers = self.parse(layers)
@@ -394,11 +380,11 @@ class ConvAutoEncShell(cmd.Cmd):
             for k in layers:
                 new_h[:, :, :, k:k + 1] = act_h
 
-            self.config["counter"] += 1
+            self.counter += 1
             print("Hallucinating...")
-            result = self.config["session"].run([self.config["summary"]], feed_dict={h: new_h, x: self.empty_x})
+            result = self.session.run([self.merged], feed_dict={h: new_h, x: self.empty_x})
             print("Wrinting on tensorboard...")
-            self.writer.add_summary(result[0], self.config["counter"])
+            self.writer.add_summary(result[0], self.counter)
             self.writer.flush()
             print("Completed - Reload TensorBoard")
 
@@ -432,12 +418,12 @@ class ConvAutoEncShell(cmd.Cmd):
                 print("Writer not defined. Please create a new writer first")
                 return
 
-            test = self.config["dh"].test_image(call)
-            self.config["counter"] += 1
+            test = self.dataset.test_image(call)
+            self.counterw += 1
             print("Evaluating...")
-            result = self.config["session"].run([self.config["summary"]], feed_dict={self.config["stack"].caes[0].x: test})
+            result = self.session.run([self.merged], feed_dict={self.model.caes[0].x: test})
             print("Wrinting on tensorboard...")
-            self.writer.add_summary(result[0], self.config["counter"])
+            self.writer.add_summary(result[0], self.counter)
             self.writer.flush()
             print("Completed - Reload TensorBoard")
         except Exception as e:
